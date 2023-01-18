@@ -4,7 +4,8 @@
   "main": "./dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon -e .ts --exec node --loader=ts-node/esm index.ts "
+    "dev": "nodemon -e .ts --exec node --loader=ts-node/esm index.ts",
+    "build": "tsc --build ./ts-config.json"
   },
   "devDependencies": {
     "@types/express": "^4.17.15",
@@ -29,5 +30,8 @@
   "keywords": [],
   "author": "rzkfyn",
   "license": "MIT",
-  "description": ""
+  "description": "",
+  "engines": {
+    "node": "16.x"
+  }
 }
