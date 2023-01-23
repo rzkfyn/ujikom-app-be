@@ -1,5 +1,5 @@
 import express, { json, urlencoded } from 'express';
-import routes from '@routes/routes.js';
+import routes from './routes/routes.js';
 import 'dotenv/config';
 
 const app = express();

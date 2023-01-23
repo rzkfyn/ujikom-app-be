@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import User from '@models/User';
+// import { nanoid } from 'nanoid';
+import User from '../models/User.js';
+
 
 class AuthController {
   public static register = async (req: Request, res: Response) => {
