@@ -6,5 +6,6 @@ const router = Router();
 
 router.use(verifyToken);
 router.post('/verify-email', UserController.verifyEmail);
+router.get('/email-verification-code', UserController.requestNewEmailVerificationCode);
 
 export default router;
