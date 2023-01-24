@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
-import { QueryTypes, where } from 'sequelize';
+import { QueryTypes } from 'sequelize';
 import User from '../models/User.js';
 import MailService from '../services/MailService.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
@@ -22,6 +22,7 @@ class AuthController {
     const emptyDataIndex = Object.values(requestBody).findIndex((val) => !val);
 
     if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requestBody)[emptyDataIndex]} is required!` });
+    if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });
     if (password !== password_confirmation) return res.status(400).json({ status: 'Error', message: 'Password doesn\'t match' });
 
     let access_token;
@@ -100,6 +101,25 @@ class AuthController {
       httpOnly: true
     });
     return res.status(200).json({ status: 'Ok', message: 'Login success', data: { access_token } });
+  };
+
+  public static logout = async (req: Request, res: Response) => {
+    const { refresh_token } = req.cookies;
+
+    try {
+      if (refresh_token) {
+        const user = await User.findOne({ where: { refresh_token } }) as userType | null;
+        if (user) {
+          await User.update({ refresh_token: null }, { where: { id: user.id } });
+        }
+      }
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    res.clearCookie('refresh_token');
+    return res.status(200).json({ status: 'Ok', message: 'Logout success' });
   };
 }
 
