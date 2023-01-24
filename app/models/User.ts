@@ -20,6 +20,10 @@ const User = Database.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  refresh_token: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   email_verified_at: {
     type: DataTypes.DATE,
     allowNull: true

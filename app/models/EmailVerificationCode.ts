@@ -8,8 +8,7 @@ const EmailVerificationCode = Database.define('EmailVerificationCode', {
   },
   code: {
     type: DataTypes.STRING,
-    allowNull: false,
-    unique: true
+    allowNull: false
   },
   expired_at: {
     type: DataTypes.DATE,

@@ -1,8 +1,9 @@
 import { createTransport, Transporter } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import 'dotenv/config';
 
 const {
-  SMTP_SERVER,
+  SMTP_HOST,
   SMTP_PORT,
   SMTP_SENDER,
   SMTP_USER,
@@ -10,11 +11,11 @@ const {
 } = process.env;
 
 class MailService {
-  private transport: Transporter<SMTPTransport.SentMessageInfo>;
+  private transporter: Transporter<SMTPTransport.SentMessageInfo>;
 
-  public constructor() {
-    this.transport = createTransport({
-      host: SMTP_SERVER,
+  constructor() {
+    this.transporter = createTransport({
+      host: SMTP_HOST,
       port: SMTP_PORT,
       secure: true,
       auth: {
@@ -27,8 +28,8 @@ class MailService {
   public sendMail = async ({ to, subject, text, html }: {
     to: string, subject: string, text?: string | undefined, html?: string | undefined
   }) => {
-    return await this.transport.sendMail({ 
-      from: `No Reply ${SMTP_SENDER}`, to, subject, text, html
+    await this.transporter.sendMail({ 
+      from: `No Reply <${SMTP_SENDER}>`, to, subject, text, html
     });
   };
 }
