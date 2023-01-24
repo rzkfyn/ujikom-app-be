@@ -13,7 +13,7 @@ const Database = new Sequelize({
   dialect: DB_DIALECT as Dialect ?? 'mysql',
   port: parseInt(DB_PORT as string) ?? 3306,
   host: DB_HOST ?? 'localhost',
-  database: DB_DATABASE ?? 'tbd',
+  database: DB_DATABASE ?? 'tbdl',
   username: DB_USERNAME ?? 'root',
   password: DB_PASSWORD ?? ''
 });

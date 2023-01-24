@@ -37,18 +37,18 @@ class AuthController {
         user = await User.findOne({ where: { email } });
         if (user) dataAlreadyExistsOnField = 'Email';
       }
-      console.log(dataAlreadyExistsOnField);
       if (dataAlreadyExistsOnField) return res.status(400).json({
         status: 'Error', message: `${dataAlreadyExistsOnField} already used`
       });
 
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
-      refresh_token = jwt.sign({ name, email, username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
-      access_token = jwt.sign({ name, email, username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
-      const newUser = await User.create({ name, username, email, password: hashedPassword, refresh_token });
-      const verificationCode = nanoid(6);
+      const newUser = await User.create({ name, username, email, password: hashedPassword });
+      refresh_token = jwt.sign({ id: newUser.dataValues.id, email, username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
+      access_token = jwt.sign({ id: newUser.dataValues.id, name, email, username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+      await User.update({ refresh_token }, { where: { id: newUser.dataValues.id } });
 
+      const verificationCode = nanoid(6);
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
       });
@@ -145,7 +145,7 @@ class AuthController {
     if (!((decoded.id === user.id) && (decoded.email === user.email) && (decoded.username === user.username))) return res.status(401).json({
       status: 'Error', message: 'Refresh token is invalid'
     });
-    const access_token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '30s' });
+    const access_token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
 
     return res.status(200).json({ status: 'Ok', message: 'Access token refreshed', data: { access_token } });
   };
