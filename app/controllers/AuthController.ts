@@ -10,6 +10,7 @@ import Database from '../core/Database.js';
 import type {
   user as userType
 } from '../types/types.js';
+import ResetPasswordVerificationCode from '../models/ResetPasswordVerificationCode.js';
 
 class AuthController {
   private static mailService = new MailService();
@@ -52,7 +53,7 @@ class AuthController {
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
       });
-      await AuthController.mailService.sendMail({
+      await this.mailService.sendMail({
         to: email,
         subject: 'Email Verification Code',
         text: `Hello ${username}!\nuse this code to verify your email: ${verificationCode}`
@@ -148,6 +149,32 @@ class AuthController {
     const access_token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
 
     return res.status(200).json({ status: 'Ok', message: 'Access token refreshed', data: { access_token } });
+  };
+
+  public static requestResetPasswordVerificationCode = async (req: Request, res: Response) => {
+    const { uid } = req.body;
+
+    let user: userType[] | userType;
+    try {
+      user = await Database.query(`SELECT * FROM users WHERE username='${uid}' OR email='${uid}' LIMIT 1`, {
+        type: QueryTypes.SELECT,
+      }) as userType[];
+      user = user[0];
+      if (!user) return res.status(400).json({ status: 'Error', message: 'There\'s no account with the given username or email' });
+
+      const verificationCode = nanoid(6);
+      await ResetPasswordVerificationCode.create({ code: verificationCode, user_id: user.id, expired_at: new Date(+ new Date() + (4 * 60 * 60 * 1000)).toISOString() });
+      await this.mailService.sendMail({
+        to: user.email,
+        subject: 'Reset Password Verification Code',
+        text: `Hi ${user.username}!\nsomeone (hopefully you) was requesting to reset your account's password.\nUse this code to change your password: ${verificationCode}`
+      });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Success, reset password verification code has been sent', data: { email_sent_to: user.email } });
   };
 }
 
