@@ -3,14 +3,15 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
 import { QueryTypes } from 'sequelize';
+import Database from '../core/Database.js';
 import User from '../models/User.js';
 import MailService from '../services/MailService.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
-import Database from '../core/Database.js';
-import type {
-  user as userType
-} from '../types/types.js';
 import ResetPasswordVerificationCode from '../models/ResetPasswordVerificationCode.js';
+import type {
+  user as userType,
+  resetPasswordVerificationCode as resetPasswordVerificationCodeType
+} from '../types/types.js';
 
 class AuthController {
   private static mailService = new MailService();
@@ -175,6 +176,30 @@ class AuthController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Success, reset password verification code has been sent', data: { email_sent_to: user.email } });
+  };
+
+  public static resetPassword = async (req: Request, res: Response) => {
+    const { verification_code, password } = req.body;
+    const requestBody = { verification_code, password };
+    const emptyDataIndex = Object.values(requestBody).findIndex((val) => !val);
+
+    if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requestBody)[emptyDataIndex]} is required!` });
+    if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });
+
+    try {
+      const resetPasswordCode = await ResetPasswordVerificationCode.findOne({ where: { code: verification_code, deleted_at: null } }) as resetPasswordVerificationCodeType | null;
+      if (!resetPasswordCode) return res.status(400).json({ status: 'Error', message: 'Reset password code is invalid' });
+      if (new Date(resetPasswordCode.expired_at).toISOString() <= new Date().toISOString()) return res.status(400).json({ status: 'Error', message: 'The given reset password code is already expired' });
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      await User.update({ password: hashedPassword }, { where: { id: resetPasswordCode.user_id } });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Password changed successfully' });
   };
 }
 

@@ -21,7 +21,18 @@ type emailVerificationCode = {
   updated_at: Date;
 };
 
+type resetPasswordVerificationCode = {
+  id: number;
+  user_id: number;
+  code: string;
+  expired_at: Date;
+  deleted_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
 export {
   user,
-  emailVerificationCode
+  emailVerificationCode,
+  resetPasswordVerificationCode
 };
