@@ -90,7 +90,7 @@ class AuthController {
       refresh_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
       access_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
 
-      await User.update({ access_token }, { where: { id: user.id } });
+      await User.update({ refresh_token }, { where: { id: user.id } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -120,6 +120,34 @@ class AuthController {
 
     res.clearCookie('refresh_token');
     return res.status(200).json({ status: 'Ok', message: 'Logout success' });
+  };
+
+  public static refreshAccessToken = async (req: Request, res: Response) => {
+    const { refresh_token } = req.cookies;
+    if (!refresh_token) return res.status(400).json({ status: 'Error', message: 'Refresh token doesnt\'t exist' });
+    
+    let user;
+    try {
+      user = await User.findOne({ where: { refresh_token } }) as userType | null;
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+    if (!user) return res.status(401).json({ status: 'Error', message: 'Refresh token is invalid' });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refresh_token, process.env.SECRET_JWT_REFRESH_TOKEN as string) as { id: number, username: string, email: string };
+    } catch(_) {
+      return res.status(401).json({ status: 'Error', message: 'Refresh token is invalid or already expired' });
+    }
+
+    if (!((decoded.id === user.id) && (decoded.email === user.email) && (decoded.username === user.username))) return res.status(401).json({
+      status: 'Error', message: 'Refresh token is invalid'
+    });
+    const access_token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '30s' });
+
+    return res.status(200).json({ status: 'Ok', message: 'Access token refreshed', data: { access_token } });
   };
 }
 
