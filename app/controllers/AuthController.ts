@@ -2,9 +2,14 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
+import { QueryTypes, where } from 'sequelize';
 import User from '../models/User.js';
 import MailService from '../services/MailService.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
+import Database from '../core/Database.js';
+import type {
+  user as userType
+} from '../types/types.js';
 
 class AuthController {
   private static mailService = new MailService();
@@ -58,6 +63,43 @@ class AuthController {
 
     res.cookie('refresh_token', refresh_token, { maxAge: 24 * 60 * 60 * 1000, secure: false, httpOnly: true });
     return res.status(201).json({ status: 'Ok', message: 'Successfully registered new account', data: { access_token } });
+  };
+
+  public static login = async (req: Request, res: Response) => {
+    const { uid, password } = req.body;
+
+    let user;
+    try {
+      user = await Database.query(`SELECT * FROM users WHERE username='${uid}' or email='${uid}' LIMIT 1`, {
+        type: QueryTypes.SELECT
+      }) as userType[] | null; 
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+    if (!user || !user[0]) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
+    user = user[0] as userType;
+
+    let refresh_token;
+    let access_token;
+    try {
+      const comparationResult = await bcrypt.compare(password, user.password);
+      if (!comparationResult) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
+
+      refresh_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
+      access_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+
+      await User.update({ access_token }, { where: { id: user.id } });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    res.cookie('refresh_token', refresh_token, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true
+    });
+    return res.status(200).json({ status: 'Ok', message: 'Login success', data: { access_token } });
   };
 }
 
