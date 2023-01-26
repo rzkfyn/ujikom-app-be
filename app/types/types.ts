@@ -30,6 +30,17 @@ type profile = {
   updatedAt: Date;
 };
 
+type profileMedia = {
+  id: number;
+  profile_id: number;
+  file_name: string | null;
+  file_mime_type: string | null;
+  context: 'PROFILE_IMAGE' | 'COVER_IMAGE';
+  deleted_at: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 type emailVerificationCode = {
   id: number;
   user_id: number;
@@ -50,9 +61,10 @@ type resetPasswordVerificationCode = {
   updatedAt: Date;
 };
 
-export {
+export type {
   user,
   emailVerificationCode,
   resetPasswordVerificationCode,
-  profile
+  profile,
+  profileMedia
 };

@@ -5,7 +5,9 @@ import verifyToken from '../../app/middlewares/verifyToken.js';
 const router = Router();
 
 router.use(verifyToken);
-router.post('/verify-email', UserController.verifyEmail);
-router.get('/email-verification-code', UserController.requestNewEmailVerificationCode);
+router.post('/email/verify', UserController.verifyEmail);
+router.get('/email/verification-code', UserController.requestNewEmailVerificationCode);
+router.get('/:username?', UserController.getUser);
+router.put('/profile-image', UserController.updateProfileImage);
 
 export default router;
