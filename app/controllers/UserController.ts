@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import Profile from '../models/Profile.js';
@@ -133,6 +134,27 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Profile updated successfully' });
+  };
+
+  public static updateProfileImage = async (req: Request, res: Response) => {
+    const { userData } = req.body;
+    const profile_image = req.files?.profile_image as UploadedFile | null;
+
+    if (!profile_image) return res.status(400).json({ status: 'Error', message: 'profile image\'s file is required' });
+    if (profile_image.size > (5 * 1024 * 1024)) return res.status(400).json({ status: 'Error', message: 'Please upload an image lower than 5 mb.' });
+
+    try {
+      const newFileName = `${+ new Date()}${profile_image.name.split('.')[0]}.${profile_image.name.split('.')[profile_image.name.split('.').length-1]}`;
+      const profile = await Profile.findOne({ where: { user_id: userData.id } }) as profileType | null;
+      console.log(newFileName);
+      await ProfileMedia.update({ file_mime_type: profile_image.mimetype, file_name: newFileName }, { where: { profile_id: profile?.id, context: 'PROFILE_IMAGE' } });
+      await profile_image.mv(`public/media/images/profile_images/${newFileName}`);
+    }catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Profile image changed successfully' });
   };
 }
 
