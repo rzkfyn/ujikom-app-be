@@ -5,30 +5,34 @@ import { nanoid } from 'nanoid';
 import { QueryTypes } from 'sequelize';
 import Database from '../core/Database.js';
 import User from '../models/User.js';
-import MailService from '../services/MailService.js';
+import Profile from '../models/Profile.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import ResetPasswordVerificationCode from '../models/ResetPasswordVerificationCode.js';
+import MailService from '../services/MailService.js';
 import type {
   user as userType,
   resetPasswordVerificationCode as resetPasswordVerificationCodeType
 } from '../types/types.js';
+import ProfileMedia from '../models/ProfileMedia.js';
+
 
 class AuthController {
   private static mailService = new MailService();
 
   public static register = async (req: Request, res: Response) => {
-    const { name, username, email, password, password_confirmation }: {
-      name: string, username: string, email: string, password: string, password_confirmation: string
+    const { name, username, email, password, password_confirmation, date_of_birth, gender }: {
+      name: string, username: string, email: string, password: string, password_confirmation: string, date_of_birth: string, gender: 'MALE' | 'FEMALE' | undefined
     } = req.body;
-    const requestBody = { name, username, email, password, password_confirmation };
-    const emptyDataIndex = Object.values(requestBody).findIndex((val) => !val);
+    const requiredRequestBody = { name, username, email, password, password_confirmation, date_of_birth };
+    const emptyDataIndex = Object.values(requiredRequestBody).findIndex((val) => !val);
 
-    if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requestBody)[emptyDataIndex]} is required!` });
+    if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requiredRequestBody)[emptyDataIndex]} is required!` });
     if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });
     if (password !== password_confirmation) return res.status(400).json({ status: 'Error', message: 'Password doesn\'t match' });
 
     let access_token;
     let refresh_token;
+    let newUser;
     try {
       let dataAlreadyExistsOnField = null;
       let user = await User.findOne({ where: { username } });
@@ -45,11 +49,15 @@ class AuthController {
 
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
-      const newUser = await User.create({ name, username, email, password: hashedPassword });
+
+      newUser = await User.create({ name, username, email, password: hashedPassword });
+      const age = new Date().getFullYear() - new Date(date_of_birth).getFullYear();
+      const newProfile = await Profile.create({ user_id: newUser.dataValues.id, date_of_birth: new Date(date_of_birth).toISOString(), age, gender: gender ?? null });
+      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'PROFILE_IMAGE' });
+      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'COVER_IMAGE' });
       refresh_token = jwt.sign({ id: newUser.dataValues.id, email, username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
       access_token = jwt.sign({ id: newUser.dataValues.id, name, email, username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
       await User.update({ refresh_token }, { where: { id: newUser.dataValues.id } });
-
       const verificationCode = nanoid(6);
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
@@ -65,7 +73,18 @@ class AuthController {
     }
 
     res.cookie('refresh_token', refresh_token, { maxAge: 24 * 60 * 60 * 1000, secure: false, httpOnly: true });
-    return res.status(201).json({ status: 'Ok', message: 'Successfully registered new account', data: { access_token } });
+    return res.status(201).json({
+      status: 'Ok',
+      message: 'Successfully registered new account',
+      data: {
+        user: {
+          id: newUser.dataValues.id,
+          username: newUser.dataValues.username,
+          email: newUser.dataValues.email
+        },
+        access_token
+      }
+    });
   };
 
   public static login = async (req: Request, res: Response) => {
@@ -102,7 +121,14 @@ class AuthController {
       maxAge: 24 * 60 * 60 * 1000,
       httpOnly: true
     });
-    return res.status(200).json({ status: 'Ok', message: 'Login success', data: { access_token } });
+    return res.status(200).json({ status: 'Ok', message: 'Login success', data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username
+      },
+      access_token
+    }});
   };
 
   public static logout = async (req: Request, res: Response) => {
