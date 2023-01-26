@@ -1,7 +1,7 @@
 import { DataTypes } from 'sequelize';
 import Database  from '../core/Database.js';
 
-const ResetPasswordVerificationCode = Database.define('EmailVerificationCode', {
+const ResetPasswordVerificationCode = Database.define('ResetPasswordVerificationCode', {
   user_id: {
     type: DataTypes.BIGINT,
     allowNull: false
