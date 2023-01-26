@@ -18,6 +18,8 @@ const ResetPasswordVerificationCode = Database.define('ResetPasswordVerification
     type: DataTypes.DATE,
     allowNull: true
   }
+},{
+  tableName: 'ResetPasswordVerificationCodes'
 });
 
 export default ResetPasswordVerificationCode;

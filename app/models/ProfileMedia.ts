@@ -22,6 +22,8 @@ const ProfileMedia = Database.define('ProfileMedia', {
     type: DataTypes.DATE,
     allowNull: true
   }
+}, {
+  tableName: 'ProfileMedias'
 });
 
 export default ProfileMedia;

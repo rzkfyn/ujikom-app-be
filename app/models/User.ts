@@ -32,6 +32,8 @@ const User = Database.define('User', {
     type: DataTypes.DATE,
     allowNull: true
   }
+},{
+  tableName: 'Users'
 });
 
 export default User;

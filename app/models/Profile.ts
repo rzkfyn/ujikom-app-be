@@ -30,6 +30,8 @@ const Profile = Database.define('Profile', {
     type: DataTypes.DATE,
     allowNull: true
   }
+},{
+  tableName: 'Profiles'
 });
 
 export default Profile;

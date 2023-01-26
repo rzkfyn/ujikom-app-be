@@ -18,6 +18,8 @@ const EmailVerificationCode = Database.define('EmailVerificationCode', {
     type: DataTypes.DATE,
     allowNull: true
   }
+},{
+  tableName: 'EmailVerificationCodes'
 });
 
 export default EmailVerificationCode;
