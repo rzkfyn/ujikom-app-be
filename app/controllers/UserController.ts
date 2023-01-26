@@ -118,6 +118,22 @@ class UserController {
       }
     });
   };
+
+  public static updateProfile = async (req: Request, res: Response) => {
+    const { userData } = req.body;
+    const { bio, location, name } = req.body;
+
+    try {
+      const user = await User.findOne({ where: { id: userData.id } }) as userType | null;
+      await Profile.update({ location: location ?? null, bio: bio ?? null }, { where: { user_id: user?.id } });
+      await User.update({ name: name ?? null }, { where: { id: user?.id } });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Profile updated successfully' });
+  };
 }
 
 export default UserController;
