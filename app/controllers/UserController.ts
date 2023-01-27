@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
+import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
 import User from '../models/User.js';
@@ -192,7 +193,24 @@ class UserController {
     return res.status(200).json({ status: 'Ok', message: 'Cover image changed successfully' });
   };
 
+  public static follow = async (req: Request, res: Response) => {
+    const { username } = req.params;
+    const { userData } = req.body;
 
+    try {
+      const user = await User.findOne({ where: { username } }) as userType | null;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user?.id, following_user_id: userData.id } });
+      if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
+      if (user.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
+      await HasFollower.create({ followed_user_id: user?.id, following_user_id: userData.id });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully followed user' });
+  };
 }
 
 export default UserController;
