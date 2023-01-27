@@ -16,6 +16,21 @@ import type {
 class UserController {
   private static mailService = new MailService();
 
+  public static isUsernameAvailable = async (req: Request, res: Response) => {
+    const { username } = req.body;
+    
+    let user;
+    try {
+      user = await User.findOne({ where: { username } }) as userType | null;
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server ' });
+    }
+    
+    const isAvailable = user ? false : true;
+    return res.status(200).json({ status: 'Ok', isAvailable});
+  };
+
   public static verifyEmail = async (req: Request, res: Response) => {
     const { verification_code } = req.body;
     const { id, username, email } = req.body.userData;
@@ -105,13 +120,14 @@ class UserController {
           updated_at: user.updatedAt,
           profile: {
             bio,
+            location: profile.location,
             profile_image: {
               file_name: profileImage?.file_name ?? 'default.jpg',
-              file_mime_type: profileImage?.file_mime_type ?? 'default.jpg',
+              file_mime_type: profileImage?.file_mime_type ?? 'image/jpg',
             },
             cover_image: {
-              file_name: coverImage?.file_name,
-              file_mime_type: coverImage?.file_mime_type,
+              file_name: coverImage?.file_name ?? 'default.jpg',
+              file_mime_type: coverImage?.file_mime_type ?? 'image/jpg',
             }
           },
           isMe
@@ -175,6 +191,8 @@ class UserController {
 
     return res.status(200).json({ status: 'Ok', message: 'Cover image changed successfully' });
   };
+
+
 }
 
 export default UserController;
