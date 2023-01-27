@@ -93,6 +93,8 @@ class UserController {
     let profile: profileType | null;
     let profileImage;
     let coverImage;
+    let followers;
+    let following;
     try {
       user = await User.findOne({ where: { username } }) as userType | null;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
@@ -100,6 +102,8 @@ class UserController {
       if (!profile) throw new Error();
       profileImage = await ProfileMedia.findOne({ where: { context: 'PROFILE_IMAGE', profile_id: profile.id } }) as profileMediaType | null;
       coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.id } }) as profileMediaType | null;
+      followers = await HasFollower.findAll({ where: {  followed_user_id: user.id, deleted_at: null } });
+      following = await HasFollower.findAll({ where: {  following_user_id: user.id, deleted_at: null } });  
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -108,6 +112,10 @@ class UserController {
     const { email, username: userName } = user;
     const { bio } = profile;
     const isMe = (email === userData.email) && (userName === userData.username) && (user.id === userData.id);
+    // @ts-ignore
+    followers = followers.map((follower) => ({ user_id: follower.following_user_id }));
+    // @ts-ignore
+    following = following.map((following) => ({ user_id: following.following_user_id }));
 
     return res.status(200).json({
       status: 'Ok',
@@ -131,6 +139,8 @@ class UserController {
               file_mime_type: coverImage?.file_mime_type ?? 'image/jpg',
             }
           },
+          followers,
+          following,
           isMe
         }
       }
@@ -200,7 +210,7 @@ class UserController {
     try {
       const user = await User.findOne({ where: { username } }) as userType | null;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user?.id, following_user_id: userData.id } });
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user?.id, following_user_id: userData.id, deleted_at: null } });
       if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
       if (user.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
       await HasFollower.create({ followed_user_id: user?.id, following_user_id: userData.id });
@@ -209,7 +219,26 @@ class UserController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Successfully followed user' });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully follow user' });
+  };
+
+  public static unfollow = async (req: Request, res: Response) => {
+    const { username } = req.params;
+    const { userData } = req.body;
+
+    try {
+      const user = await User.findOne({ where: { username } }) as userType | null;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      if (user.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t unfollow yourself' });
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.id, following_user_id: userData.id, deleted_at: null } });
+      if (!hasFollower) return res.status(400).json({ status: 'Error', message: `You're not following ${username}` });
+      await HasFollower.update({ deleted_at: new Date().toISOString() }, { where: { followed_user_id: user.id, following_user_id: userData.id } });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Error', message: 'Successfully unfollow user' });
   };
 }
 
