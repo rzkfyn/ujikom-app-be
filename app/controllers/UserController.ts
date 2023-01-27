@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
+import bcrypt from 'bcrypt';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
@@ -239,6 +240,26 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Error', message: 'Successfully unfollow user' });
+  };
+
+  public static changePassword = async (req: Request, res: Response) => {
+    const { current_password, password, password_confirmation, userData } = req.body;
+    if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'A' });
+    if (password !== password_confirmation) return res.status(400).json({ status: 'Error', message: 'New password and password confirmation doesn\'t match' });
+
+    try {
+      const user = await User.findOne({ where: { id: userData.id } }) as userType | null;
+      const comparationResult = await bcrypt.compare(current_password, user?.password as string);
+      if (!comparationResult) return res.status(401).json({ status: 'Error', message: 'Password incorrect' });
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      await User.update({ password: hashedPassword }, { where: { id: user?.id } });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Password changed successfully' });
   };
 }
 
