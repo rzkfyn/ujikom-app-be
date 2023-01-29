@@ -12,7 +12,8 @@ import type {
   user as userType,
   emailVerificationCode as emailVerificationCodeType,
   profile as profileType,
-  profileMedia as profileMediaType
+  profileMedia as profileMediaType,
+  hasFollower as hasFollowerType
 } from '../types/types.js';
 
 class UserController {
@@ -103,8 +104,8 @@ class UserController {
       if (!profile) throw new Error();
       profileImage = await ProfileMedia.findOne({ where: { context: 'PROFILE_IMAGE', profile_id: profile.id } }) as profileMediaType | null;
       coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.id } }) as profileMediaType | null;
-      followers = await HasFollower.findAll({ where: {  followed_user_id: user.id, deleted_at: null } });
-      following = await HasFollower.findAll({ where: {  following_user_id: user.id, deleted_at: null } });  
+      followers = await HasFollower.findAll({ where: {  followed_user_id: user.id, deleted_at: null } }) as unknown;
+      following = await HasFollower.findAll({ where: {  following_user_id: user.id, deleted_at: null } }) as unknown;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -113,11 +114,36 @@ class UserController {
     const { email, username: userName } = user;
     const { bio } = profile;
     const isMe = (email === userData.email) && (userName === userData.username) && (user.id === userData.id);
-    // @ts-ignore
-    followers = followers.map((follower) => ({ user_id: follower.following_user_id }));
-    // @ts-ignore
-    following = following.map((following) => ({ user_id: following.following_user_id }));
+    const userFollowers: {
+      username: string | undefined,
+      name: string | null | undefined
+    }[] = [];
+    const userFollowing: {
+      username: string | undefined,
+      name: string | null | undefined
+    }[] = [];
 
+    try {
+      for(const followerUser of (followers as hasFollowerType[])) {
+        const user = await User.findOne({ where: { id: followerUser.following_user_id } }) as userType | null;
+        userFollowers.push({
+          username: user?.username,
+          name: user?.name
+        });
+      }
+
+      for(const followingUser of (following as hasFollowerType[])) {
+        const user = await User.findOne({ where: { id: followingUser.followed_user_id } }) as userType | null;
+        userFollowing.push({
+          username: user?.username,
+          name: user?.name
+        });
+      }
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+    
     return res.status(200).json({
       status: 'Ok',
       message: 'User fetched successfully',
@@ -140,8 +166,8 @@ class UserController {
               file_mime_type: coverImage?.file_mime_type ?? 'image/jpg',
             }
           },
-          followers,
-          following,
+          followers: userFollowers,
+          following: userFollowing,
           isMe
         }
       }
@@ -260,6 +286,30 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Password changed successfully' });
+  };
+
+  public static changeEmail = async (req: Request, res: Response) => {
+    const { email, password, userData } = req.body;
+    try {
+      const user = await User.findOne({ where: { id: userData.id } }) as userType | null;
+      if (!user) throw new Error();
+      const comparationResult = await bcrypt.compare(password, user.password);
+      if (!comparationResult) return res.status(401).json({ status: 'Password incorrect' });
+      const verificationCode = nanoid(6);
+      await EmailVerificationCode.update({ deleted_at: new Date().toISOString() }, { where: { user_id: user.id } });
+      await EmailVerificationCode.create({ user_id: user.id, code: verificationCode, expired_at: new Date((+ new Date() + (4 * 60 * 60 * 1000))) });
+      await User.update({ email_verified_at: null, email }, { where: { id: user.id } });
+      await this.mailService.sendMail({
+        to: email,
+        subject: 'Email Verification Code',
+        text: `Hello ${user.username}!\nuse this code to verify your email: ${verificationCode}`
+      });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Insternal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Email changed successfully, check your email for verification code' });
   };
 }
 
