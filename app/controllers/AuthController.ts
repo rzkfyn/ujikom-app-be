@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
-import { QueryTypes } from 'sequelize';
-import Database from '../core/Database.js';
+import { Model, Op} from 'sequelize';
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
+import ProfileMedia from '../models/ProfileMedia.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import ResetPasswordVerificationCode from '../models/ResetPasswordVerificationCode.js';
 import MailService from '../services/MailService.js';
@@ -13,8 +13,6 @@ import type {
   user as userType,
   resetPasswordVerificationCode as resetPasswordVerificationCodeType
 } from '../types/types.js';
-import ProfileMedia from '../models/ProfileMedia.js';
-
 
 class AuthController {
   private static mailService = new MailService();
@@ -50,7 +48,7 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      newUser = await User.create({ name, username, email, password: hashedPassword });
+      newUser = await User.create({ name, username, email, password: hashedPassword }) as Model<userType, userType>;
       const age = new Date().getFullYear() - new Date(date_of_birth).getFullYear();
       const newProfile = await Profile.create({ user_id: newUser.dataValues.id, date_of_birth: new Date(date_of_birth).toISOString(), age, gender: gender ?? null });
       await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'PROFILE_IMAGE' });
@@ -92,26 +90,28 @@ class AuthController {
 
     let user;
     try {
-      user = await Database.query(`SELECT * FROM users WHERE username='${uid}' or email='${uid}' LIMIT 1`, {
-        type: QueryTypes.SELECT
-      }) as userType[] | null; 
+      user = await User.findOne({ where: {
+        [Op.or]: [
+          { username: uid },
+          { email: uid }
+        ] 
+      }}) as Model<userType, userType>;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
-    if (!user || !user[0]) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
-    user = user[0] as userType;
+    if (!user) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
 
     let refresh_token;
     let access_token;
     try {
-      const comparationResult = await bcrypt.compare(password, user.password);
+      const comparationResult = await bcrypt.compare(password, user.dataValues.password);
       if (!comparationResult) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
 
-      refresh_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
-      access_token = jwt.sign({ id: user.id, email: user.email, username: user.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+      refresh_token = jwt.sign({ id: user.dataValues.id, email: user.dataValues.email, username: user.dataValues.username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
+      access_token = jwt.sign({ id: user.dataValues.id, email: user.dataValues.email, username: user.dataValues.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
 
-      await User.update({ refresh_token }, { where: { id: user.id } });
+      await User.update({ refresh_token }, { where: { id: user.dataValues.id } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -123,9 +123,9 @@ class AuthController {
     });
     return res.status(200).json({ status: 'Ok', message: 'Login success', data: {
       user: {
-        id: user.id,
-        name: user.name,
-        username: user.username
+        id: user.dataValues.id,
+        name: user.dataValues.name,
+        username: user.dataValues.username
       },
       access_token
     }});
@@ -136,9 +136,9 @@ class AuthController {
 
     try {
       if (refresh_token) {
-        const user = await User.findOne({ where: { refresh_token } }) as userType | null;
+        const user = await User.findOne({ where: { refresh_token } }) as Model<userType, userType>;
         if (user) {
-          await User.update({ refresh_token: null }, { where: { id: user.id } });
+          await User.update({ refresh_token: null }, { where: { id: user.dataValues.id } });
         }
       }
     } catch(e) {
@@ -156,7 +156,7 @@ class AuthController {
     
     let user;
     try {
-      user = await User.findOne({ where: { refresh_token } }) as userType | null;
+      user = await User.findOne({ where: { refresh_token } }) as Model<userType, userType>;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -170,10 +170,10 @@ class AuthController {
       return res.status(401).json({ status: 'Error', message: 'Refresh token is invalid or already expired' });
     }
 
-    if (!((decoded.id === user.id) && (decoded.email === user.email) && (decoded.username === user.username))) return res.status(401).json({
+    if (!((decoded.id === user.dataValues.id) && (decoded.email === user.dataValues.email) && (decoded.username === user.dataValues.username))) return res.status(401).json({
       status: 'Error', message: 'Refresh token is invalid'
     });
-    const access_token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+    const access_token = jwt.sign({ id: user.dataValues.id, username: user.dataValues.username, email: user.dataValues.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
 
     return res.status(200).json({ status: 'Ok', message: 'Access token refreshed', data: { access_token } });
   };
@@ -181,27 +181,30 @@ class AuthController {
   public static requestResetPasswordVerificationCode = async (req: Request, res: Response) => {
     const { uid } = req.body;
 
-    let user: userType[] | userType;
+    let user;
     try {
-      user = await Database.query(`SELECT * FROM users WHERE username='${uid}' OR email='${uid}' LIMIT 1`, {
-        type: QueryTypes.SELECT,
-      }) as userType[];
-      user = user[0];
+      user = await User.findOne({ where: {
+        [Op.or]: [
+          { username: uid },
+          { email: uid }
+        ]
+      }}) as Model<userType, userType>;
       if (!user) return res.status(400).json({ status: 'Error', message: 'There\'s no account with the given username or email' });
 
       const verificationCode = nanoid(6);
-      await ResetPasswordVerificationCode.create({ code: verificationCode, user_id: user.id, expired_at: new Date(+ new Date() + (4 * 60 * 60 * 1000)).toISOString() });
+      await ResetPasswordVerificationCode.destroy({ where: { user_id: user.dataValues.id } });
+      await ResetPasswordVerificationCode.create({ code: verificationCode, user_id: user.dataValues.id, expired_at: new Date(+ new Date() + (4 * 60 * 60 * 1000)).toISOString() });
       await this.mailService.sendMail({
-        to: user.email,
+        to: user.dataValues.email,
         subject: 'Reset Password Verification Code',
-        text: `Hi ${user.username}!\nsomeone (hopefully you) was requesting to reset your account's password.\nUse this code to change your password: ${verificationCode}`
+        text: `Hi ${user.dataValues.username}!\nsomeone (hopefully you) was requesting to reset your account's password.\nUse this code to change your password: ${verificationCode}`
       });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Success, reset password verification code has been sent', data: { email_sent_to: user.email } });
+    return res.status(200).json({ status: 'Ok', message: 'Success, reset password verification code has been sent', data: { email_sent_to: user.dataValues.email } });
   };
 
   public static resetPassword = async (req: Request, res: Response) => {
@@ -213,13 +216,13 @@ class AuthController {
     if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });
 
     try {
-      const resetPasswordCode = await ResetPasswordVerificationCode.findOne({ where: { code: verification_code, deleted_at: null } }) as resetPasswordVerificationCodeType | null;
+      const resetPasswordCode = await ResetPasswordVerificationCode.findOne({ where: { code: verification_code } }) as Model<resetPasswordVerificationCodeType, resetPasswordVerificationCodeType>;
       if (!resetPasswordCode) return res.status(400).json({ status: 'Error', message: 'Reset password code is invalid' });
-      if (new Date(resetPasswordCode.expired_at).toISOString() <= new Date().toISOString()) return res.status(400).json({ status: 'Error', message: 'The given reset password code is already expired' });
+      if (new Date(resetPasswordCode.dataValues.expired_at).toISOString() <= new Date().toISOString()) return res.status(400).json({ status: 'Error', message: 'The given reset password code is already expired' });
 
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
-      await User.update({ password: hashedPassword }, { where: { id: resetPasswordCode.user_id } });
+      await User.update({ password: hashedPassword }, { where: { id: resetPasswordCode.dataValues.user_id } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
