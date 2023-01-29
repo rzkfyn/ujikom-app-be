@@ -25,13 +25,9 @@ const Profile = Database.define('Profile', {
   bio: {
     type: DataTypes.STRING,
     allowNull: true
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
 },{
-  tableName: 'Profiles'
+  paranoid: true
 });
 
 export default Profile;

@@ -9,11 +9,9 @@ const HasFollower = Database.define('HasFollower', {
   following_user_id: {
     type: DataTypes.BIGINT,
     allowNull: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
+},{
+  paranoid: true
 });
 
 export default HasFollower;

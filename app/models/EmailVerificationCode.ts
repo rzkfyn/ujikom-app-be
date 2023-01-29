@@ -2,6 +2,7 @@ import { DataTypes } from 'sequelize';
 import Database  from '../core/Database.js';
 
 const EmailVerificationCode = Database.define('EmailVerificationCode', {
+
   user_id: {
     type: DataTypes.BIGINT,
     allowNull: false
@@ -13,13 +14,9 @@ const EmailVerificationCode = Database.define('EmailVerificationCode', {
   expired_at: {
     type: DataTypes.DATE,
     allowNull: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
 },{
-  tableName: 'EmailVerificationCodes'
+  paranoid: true
 });
 
 export default EmailVerificationCode;

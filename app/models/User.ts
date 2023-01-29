@@ -27,13 +27,9 @@ const User = Database.define('User', {
   email_verified_at: {
     type: DataTypes.DATE,
     allowNull: true
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
 },{
-  tableName: 'Users'
+  paranoid: true
 });
 
 export default User;

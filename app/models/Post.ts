@@ -13,11 +13,9 @@ const Post = Database.define('Post', {
   text: {
     type: DataTypes.TEXT,
     allowNull: true
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
+},{
+  paranoid: true
 });
 
 export default Post;

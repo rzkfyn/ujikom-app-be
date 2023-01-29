@@ -7,11 +7,9 @@ const PostLike = Database.define('PostLike', {
   },
   user_id: {
     type: DataTypes.BIGINT
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
+},{
+  paranoid: true
 });
 
 export default PostLike;

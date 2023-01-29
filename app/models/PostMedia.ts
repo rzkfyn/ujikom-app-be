@@ -13,11 +13,9 @@ const PostMedia = Database.define('PostMedia', {
   file_name: {
     type: DataTypes.STRING,
     allowNull: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
+},{
+  paranoid: true
 });
 
 export default PostMedia;

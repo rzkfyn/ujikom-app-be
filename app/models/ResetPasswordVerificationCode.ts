@@ -13,13 +13,9 @@ const ResetPasswordVerificationCode = Database.define('ResetPasswordVerification
   expired_at: {
     type: DataTypes.DATE,
     allowNull: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
 },{
-  tableName: 'ResetPasswordVerificationCodes'
+  paranoid: true
 });
 
 export default ResetPasswordVerificationCode;
