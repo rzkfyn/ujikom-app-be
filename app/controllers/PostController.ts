@@ -109,10 +109,11 @@ class PostController {
   };
 
   public static savePost = async (req: Request, res: Response) => {
-    const { post_code, userData } = req.body;
+    const { postCode } = req.params;
+    const { userData } = req.body;
 
     try {
-      const post = await Post.findOne({ where: { code: post_code } }) as Model<postType, postType>;
+      const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType>;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
       const savedPost = await SavedPost.findOne({ where: { user_id: userData.id, post_id: post.dataValues.id } });
       if (savedPost) return res.status(400).json({ status: 'Error', message: 'You already saved this post' });
@@ -126,10 +127,11 @@ class PostController {
   };
 
   public static unSavePost = async (req: Request, res: Response) => {
-    const { post_code, userData } = req.body;
+    const { postCode } = req.params;
+    const { userData } = req.body;
 
     try {
-      const post = await Post.findOne({ where: { code: post_code } }) as Model<postType, postType>;
+      const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType>;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
       const savedPost = await SavedPost.findOne({ where: { user_id: userData.id, post_id: post.dataValues.id } });
       if (!savedPost) return res.status(400).json({ status: 'Error', message: 'You were not saved this post' });
