@@ -15,7 +15,7 @@ import type {
   profileMedia as profileMediaType,
   hasFollower as hasFollowerType
 } from '../types/types.js';
-import { Model } from 'sequelize';
+import { Model, ReplicationOptions } from 'sequelize';
 import HasBlocker from '../models/HasBlocker.js';
 
 
@@ -332,6 +332,25 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully blocked user' });
+  };
+
+  public static unBlockUser = async (req: Request, res: Response) => {
+    const { username } = req.params;
+    const { userData } = req.body;
+
+    if (username === userData.username) return res.status(400).json({ status: 'Error', message: 'You can\'t unblock yourself' });
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
+      if (!hasBlocker) return res.status(400).json({ status: 'Error', message: 'You were not blocked this user' });
+      await hasBlocker.destroy();
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully unblocked user' });
   };
 }
 
