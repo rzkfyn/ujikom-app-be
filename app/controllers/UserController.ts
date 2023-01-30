@@ -16,6 +16,7 @@ import type {
   hasFollower as hasFollowerType
 } from '../types/types.js';
 import { Model } from 'sequelize';
+import HasBlocker from '../models/HasBlocker.js';
 
 
 class UserController {
@@ -106,7 +107,7 @@ class UserController {
       if (!profile) throw new Error();
       profileImage = await ProfileMedia.findOne({ where: { context: 'PROFILE_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
       coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
-      followers = await HasFollower.findAll({ where: {  followed_user_id: user.dataValues.id } }) as unknown;
+      followers = await HasFollower.findAll({ where: {  follower_user_id: user.dataValues.id } }) as unknown;
       following = await HasFollower.findAll({ where: {  following_user_id: user.dataValues.id } }) as unknown;
     } catch(e) {
       console.log(e);
@@ -135,7 +136,7 @@ class UserController {
       }
 
       for(const followingUser of (following as Model<hasFollowerType, hasFollowerType>[])) {
-        const user = await User.findOne({ where: { id: followingUser.dataValues.followed_user_id } }) as Model<userType, userType>;
+        const user = await User.findOne({ where: { id: followingUser.dataValues.follower_user_id } }) as Model<userType, userType>;
         userFollowing.push({
           username: user.dataValues.username,
           name: user.dataValues.name
@@ -238,10 +239,10 @@ class UserController {
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
+      const hasFollower = await HasFollower.findOne({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
       if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
-      await HasFollower.create({ followed_user_id: user.dataValues.id, following_user_id: userData.id });
+      await HasFollower.create({ follower_user_id: user.dataValues.id, following_user_id: userData.id });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -258,9 +259,9 @@ class UserController {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
       if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t unfollow yourself' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
+      const hasFollower = await HasFollower.findOne({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (!hasFollower) return res.status(400).json({ status: 'Error', message: `You're not following ${username}` });
-      await HasFollower.destroy({ where: { followed_user_id: user.dataValues.id, following_user_id: userData.id } });
+      await HasFollower.destroy({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -314,9 +315,24 @@ class UserController {
     return res.status(200).json({ status: 'Ok', message: 'Email changed successfully, check your email for verification code' });
   };
 
-  // public static getFollowersAndFollowingInfo = () => {
+  public static blockUser = async (req: Request, res: Response) => {
+    const { username } = req.params;
+    const { userData } = req.body;
 
-  // };
+    if (username === userData.name) return res.status(400).json({ status: 'Error', message: 'You can\'t block yourself' });
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const hasBlocker = await HasBlocker.findOne({ where: { bloked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
+      if (hasBlocker) return res.status(400).json({ status: 'Error', message: 'You already blocked this user' });
+      await HasBlocker.create({ blocked_user_id: user.dataValues.id, blocker_user_id: userData.id });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully blocked user' });
+  };
 }
 
 export default UserController;
