@@ -124,6 +124,23 @@ class PostController {
 
     return res.status(200).json({ status: 'Ok', message: 'Post saved successfully' });
   };
+
+  public static unSavePost = async (req: Request, res: Response) => {
+    const { post_code, userData } = req.body;
+
+    try {
+      const post = await Post.findOne({ where: { code: post_code } }) as Model<postType, postType>;
+      if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
+      const savedPost = await SavedPost.findOne({ where: { user_id: userData.id, post_id: post.dataValues.id } });
+      if (!savedPost) return res.status(400).json({ status: 'Error', message: 'You were not saved this post' });
+      await savedPost.destroy();
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Removed post from saved successfully' });
+  };
 }
 
 export default PostController;
