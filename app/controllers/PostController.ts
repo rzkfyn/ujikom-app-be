@@ -5,6 +5,7 @@ import { Model } from 'sequelize';
 import Post from '../models/Post.js';
 import PostLike from '../models/PostLike.js';
 import PostMedia from '../models/PostMedia.js';
+import SavedPost from '../models/SavedPost.js';
 import { post as postType } from '../types/types.js';
 
 class PostController {
@@ -105,6 +106,23 @@ class PostController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully liked post' });
+  };
+
+  public static savePost = async (req: Request, res: Response) => {
+    const { post_code, userData } = req.body;
+
+    try {
+      const post = await Post.findOne({ where: { code: post_code } }) as Model<postType, postType>;
+      if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
+      const savedPost = await SavedPost.findOne({ where: { user_id: userData.id, post_id: post.dataValues.id } });
+      if (savedPost) return res.status(400).json({ status: 'Error', message: 'You already saved this post' });
+      await SavedPost.create({ user_id: userData.id, post_id: post.dataValues.id });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Post saved successfully' });
   };
 }
 
