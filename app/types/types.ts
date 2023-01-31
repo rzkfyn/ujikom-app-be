@@ -1,7 +1,7 @@
 type user = {
   id: number;
-  name: string;
-  username: string | null;
+  name: string | null;
+  username: string;
   email: string;
   password: string;
   refresh_token: string | null;
@@ -61,10 +61,31 @@ type resetPasswordVerificationCode = {
   updatedAt: Date;
 };
 
+type hasFollower = {
+  id: number;
+  follower_user_id: number;
+  following_user_id: number;
+  deleted_at: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type post = {
+  id: number;
+  user_id: number;
+  code: string;
+  text: string;
+  deleted_at: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type {
   user,
   emailVerificationCode,
   resetPasswordVerificationCode,
   profile,
-  profileMedia
+  profileMedia,
+  hasFollower,
+  post
 };
