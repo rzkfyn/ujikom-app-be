@@ -23,6 +23,7 @@ class AuthController {
     } = req.body;
     const requiredRequestBody = { name, username, email, password, password_confirmation, date_of_birth };
     const emptyDataIndex = Object.values(requiredRequestBody).findIndex((val) => !val);
+    console.log(requiredRequestBody);
 
     if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requiredRequestBody)[emptyDataIndex]} is required!` });
     if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });

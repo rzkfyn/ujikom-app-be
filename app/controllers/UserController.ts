@@ -1,22 +1,20 @@
 import { Request, Response } from 'express';
-import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
+import { Model } from 'sequelize';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
+import HasBlocker from '../models/HasBlocker.js';
 import MailService from '../services/MailService.js';
 import type {
   user as userType,
-  emailVerificationCode as emailVerificationCodeType,
   profile as profileType,
   profileMedia as profileMediaType,
   hasFollower as hasFollowerType
 } from '../types/types.js';
-import { Model, ReplicationOptions } from 'sequelize';
-import HasBlocker from '../models/HasBlocker.js';
 
 
 class UserController {
@@ -37,58 +35,6 @@ class UserController {
     return res.status(200).json({ status: 'Ok', isAvailable});
   };
 
-  public static verifyEmail = async (req: Request, res: Response) => {
-    const { verification_code } = req.body;
-    const { id, username, email } = req.body.userData;
-
-    try {
-      const user = await User.findOne({ where: { id, username, email } }) as Model<userType, userType>;
-      const emailVerificationCode = await EmailVerificationCode.findOne({ where: { code: verification_code, user_id: user.dataValues.id } }) as Model<emailVerificationCodeType, emailVerificationCodeType>;
-
-      if (user.dataValues.email_verified_at !== null) return res.status(400).json({ status: 'Error', message: 'This user\'s email is already verified' });
-      if (!emailVerificationCode) return res.status(400).json({
-        status: 'Error', message: 'The given verification code is invalid'
-      });
-      if (new Date(emailVerificationCode.dataValues.expired_at).toISOString() <= new Date().toISOString()) return res.status(400).json({
-        status: 'Error', message: 'The given verification code is already expired'
-      });
-      if ((emailVerificationCode.dataValues.code !== verification_code) || (emailVerificationCode.dataValues.user_id !== user.dataValues.id)) return res.status(400).json({
-        status: 'Error', message: 'The given verification code is invalid!'
-      });
-
-      await User.update({ email_verified_at: new Date().toISOString() }, { where: { id: user.dataValues.id }});
-      await EmailVerificationCode.destroy({ where: { user_id: user.dataValues.id } });
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Email verified successfully' });
-  };
-
-  public static requestNewEmailVerificationCode = async (req: Request, res: Response) => {
-    const { id, email, username } = req.body.userData;
-
-    try {
-      const user = await User.findOne({ where: { id, email, username } }) as Model<userType, userType>;
-      if (user.dataValues.email_verified_at !== null) return res.status(400).json({ status: 'Error', message: 'This user\'s email is already verified' });
-
-      await EmailVerificationCode.destroy({ where: { user_id: id } });
-      const verificationCode = nanoid(6);
-      await EmailVerificationCode.create({ code: verificationCode, user_id: id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString() });
-      await this.mailService.sendMail({
-        to: email,
-        subject: 'Email Verification Code',
-        text: `Hello ${username}!\nuse this code to verify your email: ${verificationCode}`
-      });
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Success, new email verification code has been sent' });
-  };
-
   public static getUser = async (req: Request, res: Response) => {
     let { username } = req.params;
     const { userData } = req.body;
@@ -104,11 +50,11 @@ class UserController {
       user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
       profile = await Profile.findOne({ where: { user_id: user.dataValues.id } }) as Model<profileType, profileType>;
-      if (!profile) throw new Error();
       profileImage = await ProfileMedia.findOne({ where: { context: 'PROFILE_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
       coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
-      followers = await HasFollower.findAll({ where: {  follower_user_id: user.dataValues.id } }) as unknown;
-      following = await HasFollower.findAll({ where: {  following_user_id: user.dataValues.id } }) as unknown;
+      followers = await HasFollower.findAll({ where: {  followed_user_id: user.dataValues.id } }) as unknown;
+      following = await HasFollower.findAll({ where: {  follower_user_id: user.dataValues.id } }) as unknown;
+      console.log('----------------------------------- here -----------------------');
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -128,7 +74,7 @@ class UserController {
 
     try {
       for(const followerUser of (followers as Model<hasFollowerType, hasFollowerType>[])) {
-        const user = await User.findOne({ where: { id: followerUser.dataValues.following_user_id } }) as Model<userType, userType>;
+        const user = await User.findOne({ where: { id: followerUser.dataValues.follower_user_id } }) as Model<userType, userType>;
         userFollowers.push({
           username: user?.dataValues.username,
           name: user?.dataValues.name
@@ -136,7 +82,7 @@ class UserController {
       }
 
       for(const followingUser of (following as Model<hasFollowerType, hasFollowerType>[])) {
-        const user = await User.findOne({ where: { id: followingUser.dataValues.follower_user_id } }) as Model<userType, userType>;
+        const user = await User.findOne({ where: { id: followingUser.dataValues.followed_user_id } }) as Model<userType, userType>;
         userFollowing.push({
           username: user.dataValues.username,
           name: user.dataValues.name
@@ -175,99 +121,6 @@ class UserController {
         }
       }
     });
-  };
-
-  public static updateProfile = async (req: Request, res: Response) => {
-    const { userData } = req.body;
-    const { bio, location, name } = req.body;
-
-    try {
-      await Profile.update({ location: location ?? null, bio: bio ?? null }, { where: { user_id: userData.id } });
-      await User.update({ name: name ?? null }, { where: { id: userData.id} });
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Profile updated successfully' });
-  };
-
-  public static updateProfileImage = async (req: Request, res: Response) => {
-    const { userData } = req.body;
-    const profile_image = req.files?.profile_image as UploadedFile | null;
-
-    if (!profile_image) return res.status(400).json({ status: 'Error', message: 'Profile image\'s file is required' });
-    if (profile_image.size > (5 * 1024 * 1024)) return res.status(400).json({ status: 'Error', message: 'Please upload an image lower than 5 mb.' });
-
-    try {
-      const newFileName = `${+ new Date()}${profile_image.name.split('.')[0]}.${profile_image.name.split('.')[profile_image.name.split('.').length-1]}`;
-      const profile = await Profile.findOne({ where: { user_id: userData.id } }) as Model<profileType, profileType>;
-      await ProfileMedia.update({ file_mime_type: profile_image.mimetype, file_name: newFileName }, { where: { profile_id: profile.dataValues.id, context: 'PROFILE_IMAGE' } });
-      await profile_image.mv(`public/media/images/profile_images/${newFileName}`);
-    }catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Profile image changed successfully' });
-  };
-
-  public static updateCoverImage = async (req: Request, res: Response) => {
-    const { userData } = req.body;
-    const cover_image = req.files?.cover_image as UploadedFile;
-
-    if (!cover_image) return res.status(400).json({ status: 'Error', message: 'Cover image\'s file is required' });
-    if (cover_image.size > (5 * 1024 * 1024)) return res.status(400).json({ status: 'Error', message: 'Please upload an image lower than 5 mb.' });
-
-    try {
-      const newFileName = `${+ new Date()}${cover_image.name.split('.')[0]}.${cover_image.name.split('.')[cover_image.name.split('.').length-1]}`;
-      const profile = await Profile.findOne({ where: { user_id: userData.id } }) as Model<profileType, profileType>;
-      await ProfileMedia.update({ file_mime_type: cover_image.mimetype, file_name: newFileName }, { where: { profile_id: profile.dataValues.id, context: 'COVER_IMAGE' } });
-      await cover_image.mv(`public/media/images/cover_images/${newFileName}`);
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Cover image changed successfully' });
-  };
-
-  public static follow = async (req: Request, res: Response) => {
-    const { username } = req.params;
-    const { userData } = req.body;
-
-    try {
-      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
-      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
-      if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
-      if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
-      await HasFollower.create({ follower_user_id: user.dataValues.id, following_user_id: userData.id });
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Ok', message: 'Successfully follow user' });
-  };
-
-  public static unfollow = async (req: Request, res: Response) => {
-    const { username } = req.params;
-    const { userData } = req.body;
-
-    try {
-      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
-      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t unfollow yourself' });
-      const hasFollower = await HasFollower.findOne({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
-      if (!hasFollower) return res.status(400).json({ status: 'Error', message: `You're not following ${username}` });
-      await HasFollower.destroy({ where: { follower_user_id: user.dataValues.id, following_user_id: userData.id } });
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-
-    return res.status(200).json({ status: 'Error', message: 'Successfully unfollow user' });
   };
 
   public static changePassword = async (req: Request, res: Response) => {
