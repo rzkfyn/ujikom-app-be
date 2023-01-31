@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon -e .ts --exec node --loader=ts-node/esm index.ts",
     "db:refresh": "node --loader=ts-node/esm ./database/commands/refresh.ts",
+    "db:sync": "node --loader=ts-node/esm ./database/commands/sync.ts",
     "build": "tsc --build ./ts-config.json"
   },
   "devDependencies": {
