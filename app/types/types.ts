@@ -63,8 +63,8 @@ type resetPasswordVerificationCode = {
 
 type hasFollower = {
   id: number;
+  followed_user_id: number;
   follower_user_id: number;
-  following_user_id: number;
   deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
