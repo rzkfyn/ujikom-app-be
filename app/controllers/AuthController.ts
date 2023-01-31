@@ -61,11 +61,7 @@ class AuthController {
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
       });
-      await this.mailService.sendMail({
-        to: email,
-        subject: 'Email Verification Code',
-        text: `Hello ${username}!\nuse this code to verify your email: ${verificationCode}`
-      });
+      await this.mailService.sendEmailVerificationCode({ to: email, username, verificationCode });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });

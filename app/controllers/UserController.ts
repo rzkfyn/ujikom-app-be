@@ -54,7 +54,6 @@ class UserController {
       coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
       followers = await HasFollower.findAll({ where: {  followed_user_id: user.dataValues.id } }) as unknown;
       following = await HasFollower.findAll({ where: {  follower_user_id: user.dataValues.id } }) as unknown;
-      console.log('----------------------------------- here -----------------------');
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -155,11 +154,7 @@ class UserController {
       await EmailVerificationCode.update({ deleted_at: new Date().toISOString() }, { where: { user_id: user.dataValues.id } });
       await EmailVerificationCode.create({ user_id: user.dataValues.id, code: verificationCode, expired_at: new Date((+ new Date() + (4 * 60 * 60 * 1000))) });
       await User.update({ email_verified_at: null, email }, { where: { id: user.dataValues.id } });
-      await this.mailService.sendMail({
-        to: email,
-        subject: 'Email Verification Code',
-        text: `Hello ${user.dataValues.username}!\nuse this code to verify your email: ${verificationCode}`
-      });
+      await this.mailService.sendEmailVerificationCode({ to: email, username: user.dataValues.username, verificationCode });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Insternal server error' });

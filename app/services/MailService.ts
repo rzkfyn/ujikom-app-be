@@ -32,6 +32,16 @@ class MailService {
       from: `No Reply <${SMTP_SENDER}>`, to, subject, text, html
     });
   };
+
+  public sendEmailVerificationCode = async ({ to, username, verificationCode }: {
+    to: string, username: string, verificationCode: string
+  }) => {
+    await this.sendMail({
+      to,
+      subject: 'Email Verification Code',
+      text: `Hello ${username}!\n\nuse this code to verify your email: ${verificationCode}`
+    });
+  };
 }
 
 export default MailService;
