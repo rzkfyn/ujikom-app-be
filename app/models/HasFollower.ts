@@ -6,7 +6,7 @@ const HasFollower = Database.define('HasFollower', {
     type: DataTypes.BIGINT,
     allowNull: false
   },
-  following_user_id: {
+  follower_user_id: {
     type: DataTypes.BIGINT,
     allowNull: false
   }
