@@ -4,12 +4,14 @@ import { resolve } from 'path';
 
 (async () => {
   let tables = readdirSync(resolve('app', 'models'))
-    .map((table) => table.toLowerCase().replace(/(.ts|.js)/, ''));
+    .map((table) => table.replace(/(.ts|.js)/, ''));
   try {
     tables.forEach(async (table) => {
       await Database.query(`DROP TABLE IF EXISTS ${table};`);
+      await Database.query(`DROP TABLE IF EXISTS ${table.toLowerCase()};`);
       const tableName = table.endsWith('y') ? table.replace('y', 'ies') : `${table}s`;
       await Database.query(`DROP TABLE IF EXISTS ${tableName};`);
+      await Database.query(`DROP TABLE IF EXISTS ${tableName.toLowerCase()};`);
     });
 
     setTimeout(async () => {
