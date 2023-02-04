@@ -4,20 +4,15 @@ import { Model } from 'sequelize';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
-import HasFollower from '../models/HasFollower.js';
-import Profile from '../models/Profile.js';
-import ProfileMedia from '../models/ProfileMedia.js';
 import HasBlocker from '../models/HasBlocker.js';
 import MailService from '../services/MailService.js';
+import UserService from '../services/UserService.js';
 import type {
-  user as userType,
-  profile as profileType,
-  profileMedia as profileMediaType,
-  hasFollower as hasFollowerType
+  user as userType
 } from '../types/types.js';
 
-
 class UserController {
+  private static userService = new UserService();
   private static mailService = new MailService();
 
   public static isUsernameAvailable = async (req: Request, res: Response) => {
@@ -38,87 +33,26 @@ class UserController {
   public static getUser = async (req: Request, res: Response) => {
     let { username } = req.params;
     const { userData } = req.body;
-    if (!username) username = userData.username;
+    if (!username) username = userData?.username;
+    if (!username) return res.status(204);
 
     let user;
-    let profile;
-    let profileImage;
-    let coverImage;
-    let followers;
-    let following;
     try {
-      user = await User.findOne({ where: { username } }) as Model<userType, userType>;
-      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      profile = await Profile.findOne({ where: { user_id: user.dataValues.id } }) as Model<profileType, profileType>;
-      profileImage = await ProfileMedia.findOne({ where: { context: 'PROFILE_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
-      coverImage =  await ProfileMedia.findOne({ where: { context: 'COVER_IMAGE', profile_id: profile.dataValues.id } }) as Model<profileMediaType, profileMediaType>;
-      followers = await HasFollower.findAll({ where: {  followed_user_id: user.dataValues.id } }) as unknown;
-      following = await HasFollower.findAll({ where: {  follower_user_id: user.dataValues.id } }) as unknown;
+      user = await this.userService.getUserWithProfile(username);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    const { email, username: userName } = user.dataValues;
-    const { bio } = profile.dataValues;
-    const isMe = (email === userData.email) && (userName === userData.username) && (user.dataValues.id === userData.id);
-    const userFollowers: {
-      username: string | undefined,
-      name: string | null | undefined
-    }[] = [];
-    const userFollowing: {
-      username: string | undefined,
-      name: string | null | undefined
-    }[] = [];
-
-    try {
-      for(const followerUser of (followers as Model<hasFollowerType, hasFollowerType>[])) {
-        const user = await User.findOne({ where: { id: followerUser.dataValues.follower_user_id } }) as Model<userType, userType>;
-        userFollowers.push({
-          username: user?.dataValues.username,
-          name: user?.dataValues.name
-        });
-      }
-
-      for(const followingUser of (following as Model<hasFollowerType, hasFollowerType>[])) {
-        const user = await User.findOne({ where: { id: followingUser.dataValues.followed_user_id } }) as Model<userType, userType>;
-        userFollowing.push({
-          username: user.dataValues.username,
-          name: user.dataValues.name
-        });
-      }
-    } catch(e) {
-      console.log(e);
-      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-    }
-    
+    if (typeof user === 'boolean') return res.status(404).json({ status: 'Error', message: 'User not found' });
+    const isMe = !userData ? false : userData.id === user.id;
     return res.status(200).json({
       status: 'Ok',
-      message: 'User fetched successfully',
+      message: 'Successfully fetched user',
       data: {
-        user: {
-          email,
-          userName,
-          name: user.dataValues.name,
-          created_at: user.dataValues.createdAt,
-          updated_at: user.dataValues.updatedAt,
-          profile: {
-            bio,
-            location: profile.dataValues.location,
-            profile_image: {
-              file_name: profileImage.dataValues.file_name ?? 'default.jpg',
-              file_mime_type: profileImage.dataValues.file_mime_type ?? 'image/jpg',
-            },
-            cover_image: {
-              file_name: coverImage.dataValues.file_name ?? 'default.jpg',
-              file_mime_type: coverImage.dataValues.file_mime_type ?? 'image/jpg',
-            }
-          },
-          followers: userFollowers,
-          following: userFollowing,
-          isMe
-        }
-      }
+        ...user,
+        isMe
+      },
     });
   };
 
