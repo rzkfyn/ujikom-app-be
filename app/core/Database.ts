@@ -1,4 +1,5 @@
 import { Sequelize, Dialect } from 'sequelize';
+import 'dotenv/config';
 
 const {
   DB_DIALECT,
