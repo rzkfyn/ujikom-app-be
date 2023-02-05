@@ -2,57 +2,99 @@ import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
 import { Model } from 'sequelize';
+import Database from '../core/Database.js';
 import Post from '../models/Post.js';
 import PostLike from '../models/PostLike.js';
 import PostMedia from '../models/PostMedia.js';
 import SavedPost from '../models/SavedPost.js';
-import { post as postType } from '../types/types.js';
+import User from '../models/User.js';
+import type { 
+  user as userType,
+  post as postType,
+  postMedia as postMediaType
+} from '../types/types.js';
 
 class PostController {
   public static createPost = async (req: Request, res: Response) => {
     const { text, userData } = req.body;
-    const media = req.files?.media as UploadedFile[];
-    const validatedMedia: UploadedFile[] = [];
+    let media = req.files?.media as UploadedFile[];
+    if (!Array.isArray(media) && media) media = [media];
 
+    if (media && media[0]) {
+      for (const file of media) {
+        if (file.size > (20 * 1024 * 1024)) return res.status(400).json({ status: 'Error', message: 'Max size for a file to upload is 20mb' });
+        const newFileName = `${+ new Date()}${userData.username}_post_${nanoid(4)}.${file.name.split('.')[file.name.split('.').length-1]}`;
+        file.name = newFileName;
+      }
+    }
+    const transaction = await Database.transaction();
     try {
       const postCode = nanoid(8);
       const newPost = await Post.create({ code: postCode, text, user_id: userData.id }) as Model<postType, postType>;
-      if (media[0]) {
-        media.forEach(async (file) => {
-          if (file.size > (20 * 1024 * 1024)) return res.status(400).json({ status: 'Error', message: 'Max size for a file to upload is 20mb' });
-          const newFileName = `${+ new Date()}${file.name.split('.')[0]}.${file.name.split('.')[file.name.split('.').length-1]}`;
-          file.name = newFileName;
-          validatedMedia.push(file);
+      
+      if (media && media[0]) {
+        for (const file of media) {
+          await file.mv(`./public/uploads/posts/${file.name}`);
+        }
+
+        await PostMedia.bulkCreate(media.map((file) => ({
+          file_name: file.name,
+          file_mime_type: file.mimetype,
+          post_id: newPost.dataValues.id
+        })), { transaction }) as Model<postMediaType, postMediaType>[];
+      }
+
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      await transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+    return res.status(201).json({ status: 'Ok', message: 'Post created successfully' });
+  };
+
+  public static getUserPosts = async (req: Request, res: Response) => {
+    const { username } = req.params;
+
+    const result: {
+      text: string,
+      created_at: Date,
+      media: {
+        file_name: string,
+        file_mime_type: string
+      }[]
+    }[] = [];
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const posts = await Post.findAll({ where: { user_id: user.dataValues.id }, attributes: [ 'id', 'text', 'createdAt' ] }) as unknown;
+      
+      for (const post of (posts as Model<postType, postType>[])) {
+        const postMedia = await PostMedia.findAll({ where: { post_id: post.dataValues.id } }) as unknown;
+        const media: {
+          file_name: string,
+          file_mime_type: string
+        }[] = [];
+        (postMedia as Model<postMediaType, postMediaType>[]).forEach((pm) => {
+          return media.push({
+            file_name: pm.dataValues.file_name,
+            file_mime_type: pm.dataValues.file_mime_type
+          });
         });
 
-        validatedMedia.forEach(async (file) => {
-          await PostMedia.create({ post_id: newPost.dataValues.id, file_mime_type: file.mimetype, file_name: file.name });
+        result.push({
+          text: post.dataValues.text,
+          created_at: post.dataValues.createdAt,
+          media
         });
       }
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
-    return res.status(201).json({ status: 'Ok', message: 'Post created successfully' });
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: result });
   };
-
-  // public static getPost = async (req: Request, res: Response) => {
-  //   const { postCode } = req.params;
-  //   const { userData } = req.body;
-
-  //   let post;
-  //   let postLikes;
-  //   try {
-  //     const post = await Post.findOne({ where: { code: postCode } }) as postType | null;
-  //     if (!post) return res.status(404)
-  //     const postLikes = await PostLike.findAll({ where: { post_id: post.id } }) as unknown;
-      
-  //   } catch(e) {
-  //     console.log(e);
-  //     return res.status(500).json({ status: 'Error', message: 'Internal server error' });
-  //   }
-
-  // };
 
   public static deletePost = async (req: Request, res: Response) => {
     const { postCode } = req.params;
