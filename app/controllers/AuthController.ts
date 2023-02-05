@@ -13,6 +13,8 @@ import type {
   user as userType,
   resetPasswordVerificationCode as resetPasswordVerificationCodeType
 } from '../types/types.js';
+import Database from '../core/Database.js';
+import AccountSetting from '../models/AccountSetting.js';
 
 class AuthController {
   private static mailService = new MailService();
@@ -32,6 +34,7 @@ class AuthController {
     let access_token;
     let refresh_token;
     let newUser;
+    const transaction = await Database.transaction();
     try {
       let dataAlreadyExistsOnField = null;
       let user = await User.findOne({ where: { username } });
@@ -49,21 +52,29 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      newUser = await User.create({ name, username, email, password: hashedPassword }) as Model<userType, userType>;
+      newUser = await User.create({ name, username, email, password: hashedPassword }, { transaction }) as Model<userType, userType>;
+      await AccountSetting.create({ user_id: newUser.dataValues.id, account_visibility: 'PUBLIC' }, { transaction });
       const age = new Date().getFullYear() - new Date(date_of_birth).getFullYear();
-      const newProfile = await Profile.create({ user_id: newUser.dataValues.id, date_of_birth: new Date(date_of_birth).toISOString(), age, gender: gender ?? null });
-      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'PROFILE_IMAGE' });
-      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'COVER_IMAGE' });
+      const newProfile = await Profile.create({
+        user_id: newUser.dataValues.id, date_of_birth: new Date(date_of_birth).toISOString(), age, gender: gender ?? null 
+      }, { transaction });
+      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'PROFILE_IMAGE' }, { transaction });
+      await ProfileMedia.create({ profile_id: newProfile.dataValues.id, context: 'COVER_IMAGE' }, { transaction });
+
       refresh_token = jwt.sign({ id: newUser.dataValues.id, email, username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
       access_token = jwt.sign({ id: newUser.dataValues.id, name, email, username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
-      await User.update({ refresh_token }, { where: { id: newUser.dataValues.id } });
+      await User.update({ refresh_token }, { where: { id: newUser.dataValues.id }, transaction });
+
       const verificationCode = nanoid(6);
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
-      });
+      }, { transaction });
       await this.mailService.sendEmailVerificationCode({ to: email, username, verificationCode });
+
+      await transaction.commit();
     } catch(e) {
       console.log(e);
+      await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
@@ -116,7 +127,8 @@ class AuthController {
 
     res.cookie('refresh_token', refresh_token, {
       maxAge: 24 * 60 * 60 * 1000,
-      httpOnly: true
+      httpOnly: true,
+      secure: false
     });
     return res.status(200).json({ status: 'Ok', message: 'Login success', data: {
       user: {
