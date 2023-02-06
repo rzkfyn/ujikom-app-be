@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { nanoid } from 'nanoid';
-import { Model } from 'sequelize';
+import { Model, Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
@@ -10,6 +10,7 @@ import UserService from '../services/UserService.js';
 import type {
   user as userType
 } from '../types/types.js';
+import HasFollower from '../models/HasFollower.js';
 
 class UserController {
   private static userService = new UserService();
@@ -105,9 +106,25 @@ class UserController {
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasBlocker = await HasBlocker.findOne({ where: { bloked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
+      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
       if (hasBlocker) return res.status(400).json({ status: 'Error', message: 'You already blocked this user' });
       await HasBlocker.create({ blocked_user_id: user.dataValues.id, blocker_user_id: userData.id });
+      await HasFollower.destroy({ where: {
+        [Op.or]: [
+          {
+            [Op.and]: [
+              { followed_user_id: userData.id },
+              { follower_user_id: user.dataValues.id }
+            ]
+          },
+          {
+            [Op.and]: [
+              { followed_user_id: user.dataValues.id },
+              { follower_user_id: userData.id }
+            ]
+          }
+        ]
+      } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
