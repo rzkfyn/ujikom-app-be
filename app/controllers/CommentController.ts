@@ -10,10 +10,11 @@ import { post as postType } from '../types/types.js';
 class CommentController {
   public static sendComment = async (req: Request, res: Response) => {
     const { postCode } = req.params;
-    const { text, userData, replied_comment_id } = req.body;
+    const { text, replied_comment_id, auth } = req.body;
+    const { user: authorizedUser } = auth;
     let media = req.files?.media as UploadedFile | UploadedFile[];
-    if (!Array.isArray(media) && media) media = [media];
 
+    if (!Array.isArray(media) && media) media = [media];
     if (!text && !media) return res.status(400).json({ status: 'Error', message: 'Comment\'s text or media is required' });
     if (media && media[0]) {
       for (const file of media as UploadedFile[]) {
@@ -23,11 +24,12 @@ class CommentController {
         file.name = `${Date.now()}-${file.name}`;
       }
     }
+
     const transaction = await Database.transaction();
     try {
       const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType> | null;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
-      await Comment.create({ user_id: userData.id, post_id: post.dataValues.id, replied_comment_id: replied_comment_id ?? null, text }, { transaction });
+      await Comment.create({ user_id: authorizedUser.id, post_id: post.dataValues.id, replied_comment_id: replied_comment_id ?? null, text }, { transaction });
       if (media) {
         if (Array.isArray(media)) {
           for (const file of media as UploadedFile[]) {

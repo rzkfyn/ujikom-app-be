@@ -13,15 +13,16 @@ class FollowerController {
 
   public static follow = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const { userData } = req.body;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
 
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
-      if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
-      await HasFollower.create({ followed_user_id: user.dataValues.id, follower_user_id: userData.id });
+      if (user.dataValues.id === authorizedUser.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
+      await HasFollower.create({ followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -32,15 +33,16 @@ class FollowerController {
 
   public static unfollow = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const { userData } = req.body;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
 
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      if (user.dataValues.id === userData.id) return res.status(400).json({ status: 'Error', message: 'You can\'t unfollow yourself' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: userData.id } }) as Model<hasFollowerType, hasFollowerType>;
+      if (user.dataValues.id === authorizedUser.id) return res.status(400).json({ status: 'Error', message: 'You can\'t unfollow yourself' });
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (!hasFollower) return res.status(400).json({ status: 'Error', message: `You're not following ${username}` });
-      await HasFollower.destroy({ where: { followed_user_id: user.dataValues.id, follower_user_id: userData.id } });
+      await HasFollower.destroy({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id } });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -87,12 +89,13 @@ class FollowerController {
 
   public static removeFollower = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const { userData } = req.body;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
 
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: userData.id, follower_user_id: user.dataValues.id } }) as Model<hasFollowerType, hasFollowerType> | null;
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: authorizedUser.id, follower_user_id: user.dataValues.id } }) as Model<hasFollowerType, hasFollowerType> | null;
       if (!hasFollower) return res.status(400).json({ status: 'Error', message: `${username} didn't follow your account` });
       await hasFollower.destroy();
     } catch(e) {

@@ -33,8 +33,10 @@ class UserController {
 
   public static getUser = async (req: Request, res: Response) => {
     let { username } = req.params;
-    const { userData } = req.body;
-    if (!username) username = userData?.username;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    if (!username) username = authorizedUser?.username;
     if (!username) return res.status(204);
 
     let user;
@@ -46,7 +48,7 @@ class UserController {
     }
 
     if (typeof user === 'boolean') return res.status(404).json({ status: 'Error', message: 'User not found' });
-    const isMe = !userData ? false : userData.id === user.id;
+    const isMe = !authorizedUser ? false : authorizedUser.id === user.id;
     return res.status(200).json({
       status: 'Ok',
       message: 'Successfully fetched user',
@@ -58,13 +60,14 @@ class UserController {
   };
 
   public static changePassword = async (req: Request, res: Response) => {
-    const { current_password, password, password_confirmation, userData } = req.body;
+    const { current_password, password, password_confirmation, auth } = req.body;
+    const { user: authorizedUser } = auth;
 
     if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'A minimal length of password is 8 characters long!' });
     if (password !== password_confirmation) return res.status(400).json({ status: 'Error', message: 'New password and password confirmation doesn\'t match' });
 
     try {
-      const user = await User.findOne({ where: { id: userData.id } }) as Model<userType, userType>;
+      const user = await User.findOne({ where: { id: authorizedUser.id } }) as Model<userType, userType>;
       const comparationResult = await bcrypt.compare(current_password, user.dataValues.password as string);
       if (!comparationResult) return res.status(401).json({ status: 'Error', message: 'Password incorrect' });
       const salt = await bcrypt.genSalt(10);
@@ -79,9 +82,11 @@ class UserController {
   };
 
   public static changeEmail = async (req: Request, res: Response) => {
-    const { email, password, userData } = req.body;
+    const { email, password, auth } = req.body;
+    const { user: authorizedUser } = auth;
+
     try {
-      const user = await User.findOne({ where: { id: userData.id } }) as Model<userType, userType>;
+      const user = await User.findOne({ where: { id: authorizedUser.id } }) as Model<userType, userType>;
       if (!user) throw new Error();
       const comparationResult = await bcrypt.compare(password, user.dataValues.password);
       if (!comparationResult) return res.status(401).json({ status: 'Password incorrect' });
@@ -100,27 +105,28 @@ class UserController {
 
   public static blockUser = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const { userData } = req.body;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
 
-    if (username === userData.name) return res.status(400).json({ status: 'Error', message: 'You can\'t block yourself' });
+    if (username === authorizedUser.name) return res.status(400).json({ status: 'Error', message: 'You can\'t block yourself' });
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
+      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: authorizedUser.id } });
       if (hasBlocker) return res.status(400).json({ status: 'Error', message: 'You already blocked this user' });
-      await HasBlocker.create({ blocked_user_id: user.dataValues.id, blocker_user_id: userData.id });
+      await HasBlocker.create({ blocked_user_id: user.dataValues.id, blocker_user_id: authorizedUser.id });
       await HasFollower.destroy({ where: {
         [Op.or]: [
           {
             [Op.and]: [
-              { followed_user_id: userData.id },
+              { followed_user_id: authorizedUser.id },
               { follower_user_id: user.dataValues.id }
             ]
           },
           {
             [Op.and]: [
               { followed_user_id: user.dataValues.id },
-              { follower_user_id: userData.id }
+              { follower_user_id: authorizedUser.id }
             ]
           }
         ]
@@ -135,13 +141,14 @@ class UserController {
 
   public static unBlockUser = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const { userData } = req.body;
+    const auth = req.body;
+    const { user: authorizedUser } = auth;
 
-    if (username === userData.username) return res.status(400).json({ status: 'Error', message: 'You can\'t unblock yourself' });
+    if (username === authorizedUser.username) return res.status(400).json({ status: 'Error', message: 'You can\'t unblock yourself' });
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: userData.id } });
+      const hasBlocker = await HasBlocker.findOne({ where: { blocked_user_id: user.dataValues.id, blocker_user_id: authorizedUser.id } });
       if (!hasBlocker) return res.status(400).json({ status: 'Error', message: 'You were not blocked this user' });
       await hasBlocker.destroy();
     } catch(e) {

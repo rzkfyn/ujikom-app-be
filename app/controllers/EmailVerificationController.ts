@@ -14,8 +14,9 @@ class EmailVerificationController {
   private static mailService = new MailService();
 
   public static verifyEmail = async (req: Request, res: Response) => {
-    const { verification_code } = req.body;
-    const { id, username, email } = req.body.userData;
+    const { verification_code, auth } = req.body;
+    const { user: authorizedUser } = auth;
+    const { id, username, email } = authorizedUser;
 
     try {
       const user = await User.findOne({ where: { id, username, email } }) as Model<userType, userType>;
@@ -43,7 +44,9 @@ class EmailVerificationController {
   };
 
   public static requestNewEmailVerificationCode = async (req: Request, res: Response) => {
-    const { id, email, username } = req.body.userData;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+    const { id, email, username } = authorizedUser;
 
     try {
       const user = await User.findOne({ where: { id, email, username } }) as Model<userType, userType>;
