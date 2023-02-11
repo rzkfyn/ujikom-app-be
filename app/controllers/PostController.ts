@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
-import { Model } from 'sequelize';
+import { Model, Op } from 'sequelize';
 import Database from '../core/Database.js';
 import Post from '../models/Post.js';
 import PostLike from '../models/PostLike.js';
@@ -249,6 +249,60 @@ class PostController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Removed post from saved successfully' });
+  };
+
+  public static getRandomPost = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user } = auth;
+
+    let posts;
+    try {
+      let where;
+      if (!user.id) {
+        where = { };
+      } else {
+        where = {
+          user_id: { [Op.not]: user.id }
+        };
+      }
+
+      posts = await Post.findAll({ where, include: [
+        {
+          model: PostMedia,
+          as: 'media',
+          attributes: [ 'id', 'file_name', 'file_mime_type' ]
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ],
+          include: [
+            {
+              model: Profile,
+              as: 'profile',
+              attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+              include: [
+                {
+                  model: ProfileMedia,                  
+                  as: 'profile_media',
+                  attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'likers',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        }
+      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], limit: 5 }) as unknown;
+    } catch(e) {
+      console.log(e);
+    }
+
+    const result = (posts as Model[]).map((post) => post.toJSON());
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched posts', data: result });
   };
 }
 
