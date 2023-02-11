@@ -107,6 +107,55 @@ class PostController {
     return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: posts });
   };
 
+  public static getPostByPostCode = async (req: Request, res: Response) => {
+    const { postCode } = req.params;
+
+    let post;
+    try {
+      post = await Post.findOne({ 
+        where: { code: postCode },
+        attributes: [ 'id', 'code', 'text', 'createdAt' ],
+        include: [
+          {
+            model: PostMedia,
+            as: 'media',
+            attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: [ 'name', 'id', 'username', 'createdAt' ],
+            include: [
+              {
+                model: Profile,
+                as: 'profile',
+                attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                include: [
+                  {
+                    model: ProfileMedia,
+                    as: 'profile_media',
+                    attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            model: User,
+            as: 'likers',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          }
+        ]
+      });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    if (!post) return res.status(404).json({ status: 'Error', message: 'Internal server error' });
+    return res.status(200).json({ status: 'Ok', message: 'successfully fetched post', data: post });
+  };
+
   public static deletePost = async (req: Request, res: Response) => {
     const { postCode } = req.params;
     const { auth } = req.body;
