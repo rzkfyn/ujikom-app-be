@@ -9,10 +9,12 @@ import PostMedia from '../models/PostMedia.js';
 import SavedPost from '../models/SavedPost.js';
 import User from '../models/User.js';
 import type { 
-  user as userType,
-  post as postType,
+  User as userType,
+  Post as postType,
   postMedia as postMediaType
 } from '../types/types.js';
+import Profile from '../models/Profile.js';
+import ProfileMedia from '../models/ProfileMedia.js';
 
 class PostController {
   public static createPost = async (req: Request, res: Response) => {
@@ -32,11 +34,11 @@ class PostController {
     const transaction = await Database.transaction();
     try {
       const postCode = nanoid(8);
-      const newPost = await Post.create({ code: postCode, text, user_id: authorizedUser.id }) as Model<postType, postType>;
+      const newPost = await Post.create({ code: postCode, text, user_id: authorizedUser.id, transaction }) as Model<postType, postType>;
       
       if (media && media[0]) {
         for (const file of media) {
-          await file.mv(`./public/uploads/posts/${file.name}`);
+          await file.mv(`./public/media/images/posts/${file.name}`);
         }
 
         await PostMedia.bulkCreate(media.map((file) => ({
@@ -58,44 +60,51 @@ class PostController {
   public static getUserPosts = async (req: Request, res: Response) => {
     const { username } = req.params;
 
-    const result: {
-      text: string,
-      created_at: Date,
-      media: {
-        file_name: string,
-        file_mime_type: string
-      }[]
-    }[] = [];
+    let posts;
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const posts = await Post.findAll({ where: { user_id: user.dataValues.id }, attributes: [ 'id', 'text', 'createdAt' ] }) as unknown ;
-      
-      for (const post of (posts as Model<postType, postType>[])) {
-        const postMedia = await PostMedia.findAll({ where: { post_id: post.dataValues.id } }) as unknown;
-        const media: {
-          file_name: string,
-          file_mime_type: string
-        }[] = [];
-        (postMedia as Model<postMediaType, postMediaType>[]).forEach((pm) => {
-          return media.push({
-            file_name: pm.dataValues.file_name,
-            file_mime_type: pm.dataValues.file_mime_type
-          });
-        });
-
-        result.push({
-          text: post.dataValues.text,
-          created_at: post.dataValues.createdAt,
-          media
-        });
-      }
+      posts = await Post.findAll({ 
+        where: { user_id: user.dataValues.id }, 
+        attributes: [ 'id', 'code', 'text', 'createdAt' ],
+        include: [
+          {
+            model: PostMedia,
+            as: 'media',
+            attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: [ 'name', 'id', 'username', 'createdAt' ],
+            include: [
+              {
+                model: Profile,
+                as: 'profile',
+                attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                include: [
+                  {
+                    model: ProfileMedia,
+                    as: 'profile_media',
+                    attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            model: User,
+            as: 'likers',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          }
+        ]
+      }) as unknown ;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: result });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: posts });
   };
 
   public static deletePost = async (req: Request, res: Response) => {
@@ -104,7 +113,7 @@ class PostController {
     const { user: authorizedUser } = auth;
 
     try {
-      const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType>;
+      const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType> | null;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
       if (post.getDataValue('user_id') !== authorizedUser.id) return res.status(403).json({ status: 'Error', message: 'You don\'t have permission to delete this post' });
       await post.destroy();
