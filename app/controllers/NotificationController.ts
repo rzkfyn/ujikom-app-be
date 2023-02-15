@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import Database from '../core/Database.js';
 import Notification from '../models/Notification.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
@@ -38,6 +39,43 @@ class NotificationController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully fetch notifications', data: result });
+  };
+
+  public static setNotificationsAsSeen = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    const transaction = await Database.transaction();
+    try {
+      await Notification.update({ seen_at: new Date().toISOString() }, { where: { receiver_user_id: authorizedUser.id }, transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      await transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server errror' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully set notifications as seen' });
+  };
+
+  public static deleteNotifications = async (req: Request, res: Response) => {
+    const { auth, notificationId } = req.body;
+    const { user: authorizedUser } = auth;
+
+    const transaction = await Database.transaction();
+    try {
+      const notification = await Notification.findOne({ where: { id: notificationId } });
+      if (!notification) return res.status(404).json({ status: 'Error', message: 'Notification not found' });
+      if (!notification.dataValues.receiver_user_id !== authorizedUser.id) return res.status(403).json({ status: 'Error', message: 'You can only delete your own notification' });
+      notification.destroy({ transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      await transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully ' });
   };
 }
 
