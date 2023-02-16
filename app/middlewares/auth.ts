@@ -15,7 +15,7 @@ const auth = (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).json({ status: 'Error', message: 'Access token is invalid or already expired' });
   }
   
-  req.body.auth.user = decoded;
+  req.body.auth = { user: decoded };
   next();
 };
 
