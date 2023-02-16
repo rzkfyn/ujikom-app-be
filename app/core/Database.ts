@@ -16,7 +16,8 @@ const Database = new Sequelize({
   host: DB_HOST ?? 'localhost',
   database: DB_DATABASE ?? 'tbdl',
   username: DB_USERNAME ?? 'root',
-  password: DB_PASSWORD ?? ''
+  password: DB_PASSWORD ?? '',
+  logging: false
 });
 
 export default Database;
