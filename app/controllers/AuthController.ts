@@ -10,8 +10,8 @@ import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import ResetPasswordVerificationCode from '../models/ResetPasswordVerificationCode.js';
 import MailService from '../services/MailService.js';
 import type {
-  user as userType,
-  resetPasswordVerificationCode as resetPasswordVerificationCodeType
+  User as userType,
+  ResetPasswordVerificationCode as resetPasswordVerificationCodeType
 } from '../types/types.js';
 import Database from '../core/Database.js';
 import AccountSetting from '../models/AccountSetting.js';
@@ -25,7 +25,6 @@ class AuthController {
     } = req.body;
     const requiredRequestBody = { name, username, email, password, password_confirmation, date_of_birth };
     const emptyDataIndex = Object.values(requiredRequestBody).findIndex((val) => !val);
-    console.log(requiredRequestBody);
 
     if (emptyDataIndex !== -1) return res.status(400).json({ status: 'Error', message: `field ${Object.keys(requiredRequestBody)[emptyDataIndex]} is required!` });
     if (password.length < 8) return res.status(400).json({ status: 'Error', message: 'Password too short! Password must have a minimal 8 characters long' });
@@ -34,6 +33,7 @@ class AuthController {
     let access_token;
     let refresh_token;
     let newUser;
+    let verificationCode;
     const transaction = await Database.transaction();
     try {
       let dataAlreadyExistsOnField = null;
@@ -65,11 +65,10 @@ class AuthController {
       access_token = jwt.sign({ id: newUser.dataValues.id, name, email, username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
       await User.update({ refresh_token }, { where: { id: newUser.dataValues.id }, transaction });
 
-      const verificationCode = nanoid(6);
+      verificationCode = nanoid(6);
       await EmailVerificationCode.create({ 
         code: verificationCode, user_id: newUser.dataValues.id, expired_at: new Date((+ new Date()) + (4 * 60 * 60 * 1000)).toISOString()
       }, { transaction });
-      await this.mailService.sendEmailVerificationCode({ to: email, username, verificationCode });
 
       await transaction.commit();
     } catch(e) {
@@ -79,7 +78,7 @@ class AuthController {
     }
 
     res.cookie('refresh_token', refresh_token, { maxAge: 24 * 60 * 60 * 1000, secure: false, httpOnly: true });
-    return res.status(201).json({
+    res.status(201).json({
       status: 'Ok',
       message: 'Successfully registered new account',
       data: {
@@ -91,6 +90,12 @@ class AuthController {
         access_token
       }
     });
+
+    try {
+      await this.mailService.sendEmailVerificationCode({ to: email, username, verificationCode });
+    } catch(e) {
+      console.log(e);
+    }
   };
 
   public static login = async (req: Request, res: Response) => {
@@ -143,15 +148,19 @@ class AuthController {
   public static logout = async (req: Request, res: Response) => {
     const { refresh_token } = req.cookies;
 
+    const transaction = await Database.transaction();
     try {
       if (refresh_token) {
         const user = await User.findOne({ where: { refresh_token } }) as Model<userType, userType>;
         if (user) {
-          await User.update({ refresh_token: null }, { where: { id: user.dataValues.id } });
+          await User.update({ refresh_token: null }, { where: { id: user.dataValues.id }, transaction });
         }
       }
+
+      await transaction.commit();
     } catch(e) {
       console.log(e);
+      await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
@@ -182,7 +191,7 @@ class AuthController {
     if (!((decoded.id === user.dataValues.id) && (decoded.email === user.dataValues.email) && (decoded.username === user.dataValues.username))) return res.status(401).json({
       status: 'Error', message: 'Refresh token is invalid'
     });
-    const access_token = jwt.sign({ id: user.dataValues.id, username: user.dataValues.username, email: user.dataValues.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+    const access_token = jwt.sign({ id: user.dataValues.id, username: user.dataValues.username, email: user.dataValues.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '15s' });
 
     return res.status(200).json({ status: 'Ok', message: 'Access token refreshed', data: { access_token } });
   };
