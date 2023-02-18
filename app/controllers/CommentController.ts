@@ -5,7 +5,7 @@ import Database from '../core/Database.js';
 import Comment from '../models/Comment.js';
 import CommentMedia from '../models/CommentMedia.js';
 import Post from '../models/Post.js';
-import { post as postType } from '../types/types.js';
+import { Post as postType } from '../types/types.js';
 
 class CommentController {
   public static sendComment = async (req: Request, res: Response) => {
