@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { nanoid } from 'nanoid';
-import { Model, Op } from 'sequelize';
+import { literal, Model } from 'sequelize';
+import { encode } from 'html-entities';
 import Database from '../core/Database.js';
 import Post from '../models/Post.js';
 import PostLike from '../models/PostLike.js';
@@ -15,8 +16,12 @@ import type {
 } from '../types/types.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
+import NotificationService from '../services/NotificationService.js';
+import MentionedUserOnPost from '../models/MentionedUserOnPost.js';
 
 class PostController {
+  private static notificationService = new NotificationService();
+
   public static createPost = async (req: Request, res: Response) => {
     const { text, auth } = req.body;
     const { user: authorizedUser } = auth;
@@ -34,8 +39,22 @@ class PostController {
     const transaction = await Database.transaction();
     try {
       const postCode = nanoid(8);
-      const newPost = await Post.create({ code: postCode, text, user_id: authorizedUser.id, transaction }) as Model<postType, postType>;
-      
+      const newPost = await Post.create({ code: postCode, text: encode(text ?? ''), user_id: authorizedUser.id, transaction }) as Model<postType, postType>;
+      if (text) {
+        const sanitizedText = encode(text).replace(/\r\n/g, ' ');
+        const arrText = sanitizedText.split(' ');
+
+        console.log(arrText);
+        let mentions = arrText.filter((item: string) => item.startsWith('@') || item.split('@').length > 1);
+        mentions = mentions.map((item: string) => item.split('@').length > 1 ? `@${item.split('@')[item.split('@').length - 1]}` : item);
+
+        for (const mention of mentions) {
+          const user = await User.findOne({ where: { username: mention.replace('@', '') } }) as Model<userType, userType> | null;
+
+          if (user !== null) await MentionedUserOnPost.create({ user_id: user?.dataValues.id, post_id: newPost.dataValues.id, key: mention }, { transaction });
+        }
+      }
+
       if (media && media[0]) {
         for (const file of media) {
           await file.mv(`./public/media/images/posts/${file.name}`);
@@ -96,6 +115,11 @@ class PostController {
             model: User,
             as: 'likers',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: User,
+            as: 'mentioned_users',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
           }
         ]
       }) as unknown ;
@@ -144,6 +168,11 @@ class PostController {
             model: User,
             as: 'likers',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: User,
+            as: 'mentioned_users',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
           }
         ]
       });
@@ -180,14 +209,18 @@ class PostController {
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
+    const transaction = await Database.transaction();
     try {
       const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType>;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
       const alreadyLikedPost = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (alreadyLikedPost) return res.status(400).json({ status: 'Error', message: 'You already liked this post' });
-      await PostLike.create({ post_id: post.dataValues.id, user_id: authorizedUser.id });
+      await PostLike.create({ post_id: post.dataValues.id, user_id: authorizedUser.id }, { transaction });
+      await this.notificationService.createNotification(post.dataValues.user_id, authorizedUser.id, 'LIKE', transaction);
+      await transaction.commit();
     } catch(e) {
       console.log(e);
+      await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
@@ -199,14 +232,18 @@ class PostController {
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
+    const transaction = await Database.transaction();
     try {
       const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType>;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
       const postLike = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (!postLike) return res.status(400).json({ status: 'Error', message: 'You were not liked this post' });
-      await postLike.destroy();
+      await postLike.destroy({ transaction });
+      await this.notificationService.removeNotification(post.dataValues.user_id, authorizedUser.id, 'LIKE', transaction);
+      await transaction.commit();
     } catch(e) {
       console.log(e);
+      await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
@@ -252,18 +289,25 @@ class PostController {
   };
 
   public static getRandomPost = async (req: Request, res: Response) => {
-    const { auth } = req.body;
-    const { user } = auth;
+    const { auth, exlcludePostIds } = req.body;
+    const { following } = req.query;
+    const { user: authorizedUser } = auth;
 
     let posts;
     try {
       let where;
-      if (!user.id) {
+      if (!authorizedUser.id) {
         where = { };
       } else {
-        where = {
-          user_id: { [Op.not]: user.id }
-        };
+        if (!following) {
+          where = literal(`user_id NOT IN (${authorizedUser.id})`);
+        } else {
+          where = literal(`user_id NOT IN (${authorizedUser.id}) AND user_id IN (
+            SELECT followed_user_id FROM HasFollowers hf
+            WHERE hf.follower_user_id=${authorizedUser.id}
+            AND hf.deletedAt IS NULL
+          )`);
+        }
       }
 
       posts = await Post.findAll({ where, include: [
@@ -295,14 +339,63 @@ class PostController {
           model: User,
           as: 'likers',
           attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        },
+        {
+          model: User,
+          as: 'mentioned_users',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ]
         }
-      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], limit: 5 }) as unknown;
+      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], limit: 10 }) as unknown;
     } catch(e) {
       console.log(e);
     }
 
     const result = (posts as Model[]).map((post) => post.toJSON());
     return res.status(200).json({ status: 'Ok', message: 'Successfully fetched posts', data: result });
+  };
+
+  public static getSavedPosts = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    let posts;
+    try {
+      posts = await Post.findAll({ where: { user_id: authorizedUser.id }, include: [
+        {
+          model: PostMedia,
+          as: 'media',
+          attributes: [ 'id', 'file_name', 'file_mime_type' ]
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ],
+          include: [
+            {
+              model: Profile,
+              as: 'profile',
+              attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+              include: [
+                {
+                  model: ProfileMedia,                  
+                  as: 'profile_media',
+                  attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'likers',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        }
+      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ]}) as unknown;
+    } catch(e) {
+      console.log(e);
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched sucessfully', data: posts });
   };
 }
 
