@@ -5,8 +5,8 @@ import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import MailService from '../services/MailService.js';
 import type {
-  user as userType,
-  emailVerificationCode as emailVerificationCodeType
+  User as userType,
+  EmailVerificationCode as emailVerificationCodeType
 } from '../types/types.js';
 
 
@@ -14,15 +14,13 @@ class EmailVerificationController {
   private static mailService = new MailService();
 
   public static verifyEmail = async (req: Request, res: Response) => {
-    const { verification_code, auth } = req.body;
-    const { user: authorizedUser } = auth;
-    const { id, username, email } = authorizedUser;
+    const { verification_code } = req.body;
 
     try {
-      const user = await User.findOne({ where: { id, username, email } }) as Model<userType, userType>;
-      const emailVerificationCode = await EmailVerificationCode.findOne({ where: { code: verification_code, user_id: user.dataValues.id } }) as Model<emailVerificationCodeType, emailVerificationCodeType>;
+      const emailVerificationCode = await EmailVerificationCode.findOne({ where: { code: verification_code }, paranoid: false }) as Model<emailVerificationCodeType, emailVerificationCodeType>;
+      const user = await User.findOne({ where: { id: emailVerificationCode.dataValues.user_id } }) as Model<userType, userType>;
 
-      if (user.dataValues.email_verified_at !== null) return res.status(400).json({ status: 'Error', message: 'This user\'s email is already verified' });
+      if (user.dataValues.email_verified_at !== null) return res.status(400).json({ status: 'Error', message: 'Email is already verified' });
       if (!emailVerificationCode) return res.status(400).json({
         status: 'Error', message: 'The given verification code is invalid'
       });
