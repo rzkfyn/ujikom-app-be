@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { nanoid } from 'nanoid';
-import { literal, Model, Op, where } from 'sequelize';
+import { literal, Model, Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
