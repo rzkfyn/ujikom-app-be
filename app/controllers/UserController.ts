@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { nanoid } from 'nanoid';
-import { Model, Op } from 'sequelize';
+import { literal, Model, Op, where } from 'sequelize';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
@@ -8,9 +8,11 @@ import HasBlocker from '../models/HasBlocker.js';
 import MailService from '../services/MailService.js';
 import UserService from '../services/UserService.js';
 import type {
-  user as userType
+  User as userType
 } from '../types/types.js';
 import HasFollower from '../models/HasFollower.js';
+import Profile from '../models/Profile.js';
+import ProfileMedia from '../models/ProfileMedia.js';
 
 class UserController {
   private static userService = new UserService();
@@ -21,7 +23,7 @@ class UserController {
     
     let user;
     try {
-      user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      user = await User.findOne({ where: { username }, raw: true }) as userType | null;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server ' });
@@ -35,20 +37,20 @@ class UserController {
     let { username } = req.params;
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
-
     if (!username) username = authorizedUser?.username;
     if (!username) return res.status(204);
 
     let user;
+    let isMe;
     try {
-      user = await this.userService.getUserWithProfile(username);
+      user = await this.userService.getUserDetail(username);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
     if (typeof user === 'boolean') return res.status(404).json({ status: 'Error', message: 'User not found' });
-    const isMe = !authorizedUser ? false : authorizedUser.id === user.id;
+
     return res.status(200).json({
       status: 'Ok',
       message: 'Successfully fetched user',
@@ -141,7 +143,7 @@ class UserController {
 
   public static unBlockUser = async (req: Request, res: Response) => {
     const { username } = req.params;
-    const auth = req.body;
+    const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
     if (username === authorizedUser.username) return res.status(400).json({ status: 'Error', message: 'You can\'t unblock yourself' });
@@ -157,6 +159,75 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully unblocked user' });
+  };
+
+  public static getRandomUsers = async (req: Request, res: Response) => {
+    const { limit } = req.query;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    let parsedLimit: number | undefined;
+    if (limit) {
+      parsedLimit = parseInt(limit as string);
+      if (Number.isNaN(parsedLimit)) return res.status(400).json({ status: 'Error', message: 'Limit parameter must be a number!' });
+    }
+
+    const whereRaw = `id NOT IN (
+      SELECT blocked_user_id FROM HasBlockers Hb 
+      WHERE Hb.blocker_user_id=${authorizedUser.id} 
+      AND Hb.deletedAt IS null
+    ) 
+    AND id NOT IN (
+      SELECT blocker_user_id FROM HasBlockers Hb 
+      WHERE Hb.blocked_user_id=${authorizedUser.id} 
+      AND Hb.deletedAt IS null
+    ) 
+    AND id NOT IN (
+      ${authorizedUser.id}
+    )
+    AND id NOT In (
+      SELECT followed_user_id FROM HasFollowers Hf 
+      WHERE Hf.follower_user_id=${authorizedUser.id}
+      AND Hf.deletedAt IS null
+    )`;
+
+    let users;
+    try {
+      users = await User.findAll({ 
+        attributes: [ 'id', 'username', 'name', 'createdAt' ],
+        where: literal(whereRaw),
+        include: [
+          {
+            model: Profile,
+            as: 'profile',
+            attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+            include: [
+              {
+                model: ProfileMedia,
+                as: 'profile_media',
+                attributes: [ 'file_name', 'file_mime_type', 'context' ]
+              }
+            ]
+          },
+          {
+            model: User,
+            as: 'blocker',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ],
+          },
+          {
+            model: User,
+            as: 'blocking',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ],
+          }
+        ],
+        limit: parsedLimit
+      });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Fetched users successfully', data: users });
   };
 }
 
