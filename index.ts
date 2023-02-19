@@ -5,7 +5,7 @@ import cors from 'cors';
 import fileUpload from 'express-fileupload';
 import 'dotenv/config';
 import Database from './app/core/Database.js';
-import { associationsInit } from './database/commands/associations.js';
+import { associationsInit } from './database/associations.js';
 
 const app = express();
 const port = process.env.PORT ?? 3000;
