@@ -1,17 +1,15 @@
-import { DataTypes } from 'sequelize';
 import Database from '../core/Database.js';
+import { DataTypes } from 'sequelize';
 
-const PostLike = Database.define('PostLike', {
+const PinnedPost = Database.define('PinnedPost', {
   post_id: {
     type: DataTypes.BIGINT,
-    allowNull: false
+    allowNull: false  
   },
   user_id: {
     type: DataTypes.BIGINT,
     allowNull: false
   }
-},{
-  paranoid: true
 });
 
-export default PostLike;
+export default PinnedPost;

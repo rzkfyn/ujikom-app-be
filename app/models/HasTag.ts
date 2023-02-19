@@ -1,12 +1,12 @@
 import { DataTypes } from 'sequelize';
 import Database from '../core/Database.js';
 
-const PostLike = Database.define('PostLike', {
+const HasTag = Database.define('HasTag', {
   post_id: {
     type: DataTypes.BIGINT,
     allowNull: false
   },
-  user_id: {
+  tag_id: {
     type: DataTypes.BIGINT,
     allowNull: false
   }
@@ -14,4 +14,4 @@ const PostLike = Database.define('PostLike', {
   paranoid: true
 });
 
-export default PostLike;
+export default HasTag;

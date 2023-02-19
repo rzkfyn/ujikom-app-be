@@ -17,10 +17,6 @@ const ProfileMedia = Database.define('ProfileMedia', {
   context: {
     type: DataTypes.ENUM('PROFILE_IMAGE', 'COVER_IMAGE'),
     allowNull: false
-  },
-  deleted_at: {
-    type: DataTypes.DATE,
-    allowNull: true
   }
 },{
   paranoid: true

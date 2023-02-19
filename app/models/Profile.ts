@@ -7,7 +7,7 @@ const Profile = Database.define('Profile', {
     allowNull: false
   },
   gender: {
-    type: DataTypes.ENUM('MAN', 'WOMAN'),
+    type: DataTypes.ENUM('MALE', 'FEMALE'),
     allowNull: true
   },
   location: {
@@ -21,6 +21,10 @@ const Profile = Database.define('Profile', {
   age: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  url: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   bio: {
     type: DataTypes.STRING,

@@ -1,4 +1,4 @@
-type user = {
+interface User {
   id: number;
   name: string | null;
   username: string;
@@ -6,86 +6,104 @@ type user = {
   password: string;
   refresh_token: string | null;
   email_verified_at: Date;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
-};
-
-enum gender { 
-  MAN,
-  WOMAN
+  deletedAt: Date | null;
 }
 
-type profile = {
+interface Profile {
   id: number;
   user_id: number;
   profile_picture: string | null;
-  gender: gender;
+  gender: 'MAN' | 'WOMAN';
   date_of_birth: Date;
   age: number;
   bio: string | null;
   location: string | null;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
-};
+  deletedAt: Date | null;
+}
 
-type profileMedia = {
+interface ProfileMedia {
   id: number;
   profile_id: number;
   file_name: string | null;
   file_mime_type: string | null;
   context: 'PROFILE_IMAGE' | 'COVER_IMAGE';
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt: Date | null;
 }
 
-type emailVerificationCode = {
+interface EmailVerificationCode {
   id: number;
   user_id: number;
   code: string;
   expired_at: Date;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
-};
+  deletedAt: Date | null;
+}
 
-type resetPasswordVerificationCode = {
+interface ResetPasswordVerificationCode {
   id: number;
   user_id: number;
   code: string;
   expired_at: Date;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
-};
+  deletedAt: Date | null;
+}
 
-type hasFollower = {
+interface HasFollower {
   id: number;
   followed_user_id: number;
   follower_user_id: number;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
-};
+  deletedAt: Date | null;
+}
 
-type post = {
+interface Post {
   id: number;
   user_id: number;
   code: string;
   text: string;
-  deleted_at: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt: Date | null;
 }
 
-export type {
-  user,
-  emailVerificationCode,
-  resetPasswordVerificationCode,
-  profile,
-  profileMedia,
-  hasFollower,
-  post
+interface postMedia {
+  id: number;
+  user_id: number;
+  file_mime_type: string;
+  file_name: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+interface ProfileWithMedia extends Profile {
+  profile_media: ProfileMedia[]
+}
+
+interface UserDetail extends User {
+  profile: ProfileWithMedia,
+  followers: User[],
+  following: User[],
+}
+
+export {
+  User,
+  EmailVerificationCode,
+  ResetPasswordVerificationCode,
+  Profile,
+  ProfileMedia,
+  HasFollower,
+  Post,
+  postMedia,
+  UserDetail
 };
+

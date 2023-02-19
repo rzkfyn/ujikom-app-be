@@ -10,7 +10,7 @@ class UserService {
   public getUserDetail = async (username: string) => {
     const user = await User.findOne({ 
       where: { username },
-      attributes: [ 'id', 'username', 'name', 'createdAt' ],
+      attributes: [ 'id', 'username', 'name', 'createdAt', 'email_verified_at' ],
       include: [
         {
           model: Profile,
@@ -50,6 +50,43 @@ class UserService {
     if (!user) return false;
 
     const result = user.toJSON() as UserDetail;
+    return result;
+  };
+
+  public getUserConnectionsInfo = async (username: string, context = 'followers') => {
+    const user = await User.findOne({ where: { username }, include: { 
+      model: User,
+      as: context, 
+      attributes: [ 'id', 'username', 'name', 'createdAt' ],
+      include: [
+        {
+          model: Profile,
+          as: 'profile',
+          attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+          include: [
+            {
+              model: ProfileMedia,
+              as: 'profile_media',
+              attributes: [ 'file_name', 'file_mime_type', 'context' ]
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'blocker',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ],
+        },
+        {
+          model: User,
+          as: 'blocking',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ],
+        }
+      ]
+    } }) as unknown;
+
+    if (!user) return false;
+
+    const result = ((user as any)[context] as Model[]).map((user) => user.toJSON());
     return result;
   };
 }

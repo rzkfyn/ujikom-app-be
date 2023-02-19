@@ -6,7 +6,7 @@ const User = Database.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  username: {
+  username: { 
     type: DataTypes.STRING,
     allowNull: false,
     unique: true

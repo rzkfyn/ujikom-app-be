@@ -7,7 +7,8 @@ const {
   SMTP_PORT,
   SMTP_SENDER,
   SMTP_USER,
-  SMTP_PASSWORD
+  SMTP_PASSWORD,
+  CMSAPPBASEURL
 } = process.env;
 
 class MailService {
@@ -39,7 +40,8 @@ class MailService {
     await this.sendMail({
       to,
       subject: 'Email Verification Code',
-      text: `Hello ${username}!\n\nuse this code to verify your email: ${verificationCode}`
+      // text: `Hello ${username}!\n\nuse this code to verify your email: ${verificationCode}`,
+      html: `<div><a href="${CMSAPPBASEURL}/verifyemail?code=${verificationCode}">Click this link to verify your email<a><div>`
     });
   };
 }
