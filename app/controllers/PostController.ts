@@ -36,15 +36,15 @@ class PostController {
         file.name = newFileName;
       }
     }
+    let postCode;
     const transaction = await Database.transaction();
     try {
-      const postCode = nanoid(8);
+      postCode = nanoid(12);
       const newPost = await Post.create({ code: postCode, text: encode(text ?? ''), user_id: authorizedUser.id, transaction }) as Model<postType, postType>;
       if (text) {
         const sanitizedText = encode(text).replace(/\r\n/g, ' ');
         const arrText = sanitizedText.split(' ');
 
-        console.log(arrText);
         let mentions = arrText.filter((item: string) => item.startsWith('@') || item.split('@').length > 1);
         mentions = mentions.map((item: string) => item.split('@').length > 1 ? `@${item.split('@')[item.split('@').length - 1]}` : item);
 
@@ -73,7 +73,8 @@ class PostController {
       await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
-    return res.status(201).json({ status: 'Ok', message: 'Post created successfully' });
+
+    return res.status(201).json({ status: 'Ok', message: 'Post created successfully', data: { post_code: postCode } });
   };
 
   public static getUserPosts = async (req: Request, res: Response) => {
@@ -114,6 +115,11 @@ class PostController {
           {
             model: User,
             as: 'likers',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: User,
+            as: 'saved_by_users',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
           },
           {
@@ -171,6 +177,11 @@ class PostController {
           },
           {
             model: User,
+            as: 'saved_by_users',
+            attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: User,
             as: 'mentioned_users',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
           }
@@ -216,7 +227,7 @@ class PostController {
       const alreadyLikedPost = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (alreadyLikedPost) return res.status(400).json({ status: 'Error', message: 'You already liked this post' });
       await PostLike.create({ post_id: post.dataValues.id, user_id: authorizedUser.id }, { transaction });
-      await this.notificationService.createNotification(post.dataValues.user_id, authorizedUser.id, 'LIKE', transaction);
+      await this.notificationService.createNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -239,7 +250,7 @@ class PostController {
       const postLike = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (!postLike) return res.status(400).json({ status: 'Error', message: 'You were not liked this post' });
       await postLike.destroy({ transaction });
-      await this.notificationService.removeNotification(post.dataValues.user_id, authorizedUser.id, 'LIKE', transaction);
+      await this.notificationService.removeNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -293,7 +304,7 @@ class PostController {
     const { following } = req.query;
     const { user: authorizedUser } = auth;
 
-    let posts;
+    let result;
     try {
       let where;
       if (!authorizedUser.id) {
@@ -310,7 +321,7 @@ class PostController {
         }
       }
 
-      posts = await Post.findAll({ where, include: [
+      const posts = await Post.findAll({ where, include: [
         {
           model: PostMedia,
           as: 'media',
@@ -338,6 +349,11 @@ class PostController {
         {
           model: User,
           as: 'likers',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        },
+        {
+          model: User,
+          as: 'saved_by_users',
           attributes: [ 'id', 'username', 'name', 'createdAt' ]
         },
         {
@@ -345,12 +361,13 @@ class PostController {
           as: 'mentioned_users',
           attributes: [ 'id', 'username', 'name', 'createdAt' ]
         }
-      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], limit: 10 }) as unknown;
+      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], order: [ ['id', 'DESC'] ] , limit: 20 }) as unknown;
+      result = (posts as Model[]).map((post) => post.toJSON());
     } catch(e) {
       console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    const result = (posts as Model[]).map((post) => post.toJSON());
     return res.status(200).json({ status: 'Ok', message: 'Successfully fetched posts', data: result });
   };
 
@@ -358,44 +375,69 @@ class PostController {
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
-    let posts;
+    let result;
     try {
-      posts = await Post.findAll({ where: { user_id: authorizedUser.id }, include: [
+      const posts = await SavedPost.findAll({ where: { user_id: authorizedUser.id }, include: [
         {
-          model: PostMedia,
-          as: 'media',
-          attributes: [ 'id', 'file_name', 'file_mime_type' ]
-        },
-        {
-          model: User,
-          as: 'user',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ],
+          model: Post,
+          as: 'post',
+          paranoid: true,
+          attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ],
           include: [
             {
-              model: Profile,
-              as: 'profile',
-              attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+              model: PostMedia,
+              as: 'media',
+              attributes: [ 'id', 'file_name', 'file_mime_type' ]
+            },
+            {
+              model: User,
+              as: 'user',
+              attributes: [ 'id', 'username', 'name', 'createdAt' ],
               include: [
                 {
-                  model: ProfileMedia,                  
-                  as: 'profile_media',
-                  attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                  model: Profile,
+                  as: 'profile',
+                  attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                  include: [
+                    {
+                      model: ProfileMedia,                  
+                      as: 'profile_media',
+                      attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                    }
+                  ]
                 }
               ]
+            },
+            {
+              model: User,
+              as: 'likers',
+              attributes: [ 'id', 'username', 'name', 'createdAt' ]
+            },
+            {
+              model: User,
+              as: 'saved_by_users',
+              attributes: [ 'id', 'username', 'name', 'createdAt' ]
+            },
+            {
+              model: User,
+              as: 'mentioned_users',
+              attributes: [ 'id', 'username', 'name', 'createdAt' ]
             }
           ]
-        },
-        {
-          model: User,
-          as: 'likers',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ]
         }
-      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ]}) as unknown;
+      ], order: [ [ 'id', 'DESC' ] ]}) as unknown;
+      result = (posts as Model[]).map((savedPost) => {
+        const { post } = savedPost.toJSON();
+        return post;
+      });
+      result = result.filter((post) => post !== null);
     } catch(e) {
       console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched sucessfully', data: posts });
+    console.log(result);
+    return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched saved posts', data: result });
   };
 }
 
