@@ -9,6 +9,8 @@ import PostLike from '../app/models/PostLike.js';
 import Notification from '../app/models/Notification.js';
 import MentionedUserOnPost from '../app/models/MentionedUserOnPost.js';
 import SavedPost from '../app/models/SavedPost.js';
+import Comment from '../app/models/Comment.js';
+import SharedPost from '../app/models/SharedPost.js';
 
 export const associationsInit = () => {
   User.belongsToMany(User, { 
@@ -74,4 +76,18 @@ export const associationsInit = () => {
   // SavedPost.belongsTo(User, { foreignKey: 'user_id', as: 'saved_by_user' });
   Post.hasMany(SavedPost, { foreignKey: 'post_id', as: 'saved_post_vipot' });
   SavedPost.belongsTo(Post, { foreignKey: 'post_id', as: 'post' });
+  Post.hasMany(Comment, { foreignKey: 'post_id', as: 'comments' });
+  Comment.belongsTo(Post, { foreignKey: 'post_id', as: 'post' });
+  Comment.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+  User.hasMany(Comment, { foreignKey: 'user_id', as: 'comments' });
+  Post.belongsToMany(Post, {
+    through: {
+      model: SharedPost,
+      paranoid: true
+    }, foreignKey: 'post_id', as: 'shared_post' });
+  Post.belongsToMany(Post, {
+    through: {
+      model: SharedPost,
+      paranoid: true
+    }, foreignKey: 'shared_post_id', as: 'shared_on_posts' });
 };
