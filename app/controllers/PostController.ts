@@ -18,6 +18,8 @@ import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
 import NotificationService from '../services/NotificationService.js';
 import MentionedUserOnPost from '../models/MentionedUserOnPost.js';
+import Comment from '../models/Comment.js';
+import SharedPost from '../models/SharedPost.js';
 
 class PostController {
   private static notificationService = new NotificationService();
@@ -126,6 +128,45 @@ class PostController {
             model: User,
             as: 'mentioned_users',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: Comment,
+            as: 'comments'
+          },
+          {
+            model: Post,
+            as: 'shared_post',
+            include: [
+              {
+                model: PostMedia,
+                as: 'media',
+                attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+              },
+              {
+                model: User,
+                as: 'user',
+                attributes: [ 'name', 'id', 'username', 'createdAt' ],
+                include: [
+                  {
+                    model: Profile,
+                    as: 'profile',
+                    attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                    include: [
+                      {
+                        model: ProfileMedia,
+                        as: 'profile_media',
+                        attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                model: User,
+                as: 'mentioned_users',
+                attributes: [ 'id', 'username', 'name', 'createdAt' ]
+              }
+            ]
           }
         ]
       }) as unknown ;
@@ -134,7 +175,13 @@ class PostController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: posts });
+    const result = (posts as Model[]).map((post) => {
+      const jsonPost = post.toJSON();
+      jsonPost.shared_post = jsonPost.shared_post[0] ?? null;
+      return jsonPost;
+    });
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: result });
   };
 
   public static getPostByPostCode = async (req: Request, res: Response) => {
@@ -184,6 +231,49 @@ class PostController {
             model: User,
             as: 'mentioned_users',
             attributes: [ 'id', 'username', 'name', 'createdAt' ]
+          },
+          {
+            model: Comment,
+            as: 'comments'
+          },
+          {
+            model: Post,
+            as: 'shared_on_posts'
+          },
+          {
+            model: Post,
+            as: 'shared_post',
+            include: [
+              {
+                model: PostMedia,
+                as: 'media',
+                attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+              },
+              {
+                model: User,
+                as: 'user',
+                attributes: [ 'name', 'id', 'username', 'createdAt' ],
+                include: [
+                  {
+                    model: Profile,
+                    as: 'profile',
+                    attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                    include: [
+                      {
+                        model: ProfileMedia,
+                        as: 'profile_media',
+                        attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                model: User,
+                as: 'mentioned_users',
+                attributes: [ 'id', 'username', 'name', 'createdAt' ]
+              }
+            ]
           }
         ]
       });
@@ -193,7 +283,11 @@ class PostController {
     }
 
     if (!post) return res.status(404).json({ status: 'Error', message: 'Internal server error' });
-    return res.status(200).json({ status: 'Ok', message: 'successfully fetched post', data: post });
+
+    const result = post.toJSON();
+    result.shared_post = result.shared_post[0] ?? null; 
+    
+    return res.status(200).json({ status: 'Ok', message: 'successfully fetched post', data: result });
   };
 
   public static deletePost = async (req: Request, res: Response) => {
@@ -308,7 +402,7 @@ class PostController {
     try {
       let where;
       if (!authorizedUser.id) {
-        where = { };
+        where = undefined;
       } else {
         if (!following) {
           where = literal(`user_id NOT IN (${authorizedUser.id})`);
@@ -360,9 +454,56 @@ class PostController {
           model: User,
           as: 'mentioned_users',
           attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        },
+        {
+          model: Comment,
+          as: 'comments'
+        },
+        {
+          model: Post,
+          as: 'shared_on_posts'
+        },
+        {
+          model: Post,
+          as: 'shared_post',
+          include: [
+            {
+              model: PostMedia,
+              as: 'media',
+              attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+            },
+            {
+              model: User,
+              as: 'user',
+              attributes: [ 'name', 'id', 'username', 'createdAt' ],
+              include: [
+                {
+                  model: Profile,
+                  as: 'profile',
+                  attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                  include: [
+                    {
+                      model: ProfileMedia,
+                      as: 'profile_media',
+                      attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              model: User,
+              as: 'mentioned_users',
+              attributes: [ 'id', 'username', 'name', 'createdAt' ]
+            }
+          ]
         }
       ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], order: [ ['id', 'DESC'] ] , limit: 20 }) as unknown;
-      result = (posts as Model[]).map((post) => post.toJSON());
+      result = (posts as Model[]).map((post) => {
+        const jsonPost = post.toJSON();
+        jsonPost.shared_post = jsonPost.shared_post[0] ? jsonPost.shared_post[0] : null;
+        return jsonPost;
+      });
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -422,22 +563,84 @@ class PostController {
               model: User,
               as: 'mentioned_users',
               attributes: [ 'id', 'username', 'name', 'createdAt' ]
+            },
+            {
+              model: Post,
+              as: 'shared_on_posts'
+            },
+            {
+              model: Post,
+              as: 'shared_post',
+              include: [
+                {
+                  model: PostMedia,
+                  as: 'media',
+                  attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+                },
+                {
+                  model: User,
+                  as: 'mentioned_users',
+                  attributes: [ 'id', 'username', 'name', 'createdAt' ]
+                },
+                {
+                  model: User,
+                  as: 'user',
+                  attributes: [ 'id', 'username', 'name', 'createdAt' ],
+                  include: [
+                    {
+                      model: Profile,
+                      as: 'profile',
+                      attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+                      include: [
+                        {
+                          model: ProfileMedia,                  
+                          as: 'profile_media',
+                          attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
       ], order: [ [ 'id', 'DESC' ] ]}) as unknown;
+
       result = (posts as Model[]).map((savedPost) => {
         const { post } = savedPost.toJSON();
+        post.shared_post = post.shared_post[0] ? post.shared_post[0] : null;
+
         return post;
       });
-      result = result.filter((post) => post !== null);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    console.log(result);
     return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched saved posts', data: result });
+  };
+
+  public static sharePost = async (req: Request, res: Response) => {
+    const { postCode } = req.params;
+    const { auth, text } = req.body;
+    const { user: authorizedUser } = auth;
+
+    const transaction = await Database.transaction();
+    try {
+      const sharedPost = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType> | null;
+      if (!sharedPost) return res.status(404).json({ status: 'Error', message: 'Post not found' });
+      const code = nanoid(20);
+      const newPost = await Post.create({ user_id: authorizedUser.id, text, code }, { transaction }) as Model<postType, postType>;
+      await SharedPost.create({ user_id: authorizedUser.id, post_id: newPost.dataValues.id, shared_post_id: sharedPost.dataValues.id, text }, { transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      await transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully shared post' });
   };
 }
 
