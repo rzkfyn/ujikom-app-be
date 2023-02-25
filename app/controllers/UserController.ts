@@ -13,6 +13,7 @@ import type {
 import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
+import Database from '../core/Database.js';
 
 class UserController {
   private static userService = new UserService();
@@ -23,12 +24,11 @@ class UserController {
     
     let user;
     try {
-      user = await User.findOne({ where: { username }, raw: true }) as userType | null;
+      user = await User.findOne({ where: { username } }) as Model<userType, userType> | null;
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server ' });
     }
-    
     const isAvailable = user ? false : true;
     return res.status(200).json({ status: 'Ok', isAvailable});
   };
@@ -228,6 +228,28 @@ class UserController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Fetched users successfully', data: users });
+  };
+
+  public static changeUsername = async (req: Request, res: Response) => {
+    const { auth, username } = req.body;
+    const { user: authorizedUser } = auth;
+
+    if (!username) return res.status(400).json({ status: 'Error', message: 'Field username is required' });
+    if (username.length < 0) return res.status(400).json({ status: 'Error', message: 'The minimal length of username is 3 characters long' });
+
+    const transaction = await Database.transaction();
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (user && (username.toLowerCase() !== authorizedUser.username.toLowerCase())) return res.status(400).json({ status: 'Error', message: 'Username already taken' });
+      await User.update({ username }, { where: { id: authorizedUser.id }, transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      await transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully changed username' });
   };
 }
 
