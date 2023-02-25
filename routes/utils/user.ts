@@ -7,6 +7,7 @@ import UserController from '../../app/controllers/UserController.js';
 import optAuth from '../../app/middlewares/optAuth.js';
 import auth from '../../app/middlewares/auth.js';
 import ProfileMediaController from '../../app/controllers/ProfileMediaController.js';
+import AccountSettingController from '../../app/controllers/AccountSettingController.js';
 
 const router = Router();
 
@@ -30,7 +31,9 @@ router.put('/profile/profile-image', ProfileMediaController.updateProfileImage);
 router.delete('/profile/profile-image', ProfileMediaController.removeProfileImage);
 router.put('/profile/cover-image', ProfileMediaController.updateCoverImage);
 router.delete('/profile/cover-image', ProfileMediaController.removeProfileImage);
-router.put('/account/password', UserController.changePassword);
+router.put('/account/username', UserController.changeUsername);
 router.put('/account/email', UserController.changeEmail);
+router.put('/account/password', UserController.changePassword);
+router.put('/account/visibility', AccountSettingController.changeAcccontVisibility);
 
 export default router;
