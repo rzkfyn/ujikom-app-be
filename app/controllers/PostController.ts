@@ -14,15 +14,16 @@ import type {
   Post as postType,
   postMedia as postMediaType
 } from '../types/types.js';
-import Profile from '../models/Profile.js';
-import ProfileMedia from '../models/ProfileMedia.js';
 import NotificationService from '../services/NotificationService.js';
+import PostService from '../services/PostService.js';
 import MentionedUserOnPost from '../models/MentionedUserOnPost.js';
-import Comment from '../models/Comment.js';
 import SharedPost from '../models/SharedPost.js';
+import UserService from '../services/UserService.js';
 
 class PostController {
   private static notificationService = new NotificationService();
+  private static postService = new PostService();
+  private static userService = new UserService();
 
   public static createPost = async (req: Request, res: Response) => {
     const { text, auth } = req.body;
@@ -81,107 +82,20 @@ class PostController {
 
   public static getUserPosts = async (req: Request, res: Response) => {
     const { username } = req.params;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
 
     let posts;
     try {
       const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      posts = await Post.findAll({ 
-        where: { user_id: user.dataValues.id }, 
-        attributes: [ 'id', 'code', 'text', 'createdAt' ],
-        include: [
-          {
-            model: PostMedia,
-            as: 'media',
-            attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-          },
-          {
-            model: User,
-            as: 'user',
-            attributes: [ 'name', 'id', 'username', 'createdAt' ],
-            include: [
-              {
-                model: Profile,
-                as: 'profile',
-                attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                include: [
-                  {
-                    model: ProfileMedia,
-                    as: 'profile_media',
-                    attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            model: User,
-            as: 'likers',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: User,
-            as: 'saved_by_users',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: User,
-            as: 'mentioned_users',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: Comment,
-            as: 'comments'
-          },
-          {
-            model: Post,
-            as: 'shared_post',
-            include: [
-              {
-                model: PostMedia,
-                as: 'media',
-                attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-              },
-              {
-                model: User,
-                as: 'user',
-                attributes: [ 'name', 'id', 'username', 'createdAt' ],
-                include: [
-                  {
-                    model: Profile,
-                    as: 'profile',
-                    attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                    include: [
-                      {
-                        model: ProfileMedia,
-                        as: 'profile_media',
-                        attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                model: User,
-                as: 'mentioned_users',
-                attributes: [ 'id', 'username', 'name', 'createdAt' ]
-              }
-            ]
-          }
-        ]
-      }) as unknown ;
+      posts = await this.postService.getUserPosts(user.dataValues.id);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    const result = (posts as Model[]).map((post) => {
-      const jsonPost = post.toJSON();
-      jsonPost.shared_post = jsonPost.shared_post[0] ?? null;
-      return jsonPost;
-    });
-
-    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: result });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetch user\'s posts', data: posts });
   };
 
   public static getPostByPostCode = async (req: Request, res: Response) => {
@@ -189,94 +103,7 @@ class PostController {
 
     let post;
     try {
-      post = await Post.findOne({ 
-        where: { code: postCode },
-        attributes: [ 'id', 'code', 'text', 'createdAt' ],
-        include: [
-          {
-            model: PostMedia,
-            as: 'media',
-            attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-          },
-          {
-            model: User,
-            as: 'user',
-            attributes: [ 'name', 'id', 'username', 'createdAt' ],
-            include: [
-              {
-                model: Profile,
-                as: 'profile',
-                attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                include: [
-                  {
-                    model: ProfileMedia,
-                    as: 'profile_media',
-                    attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            model: User,
-            as: 'likers',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: User,
-            as: 'saved_by_users',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: User,
-            as: 'mentioned_users',
-            attributes: [ 'id', 'username', 'name', 'createdAt' ]
-          },
-          {
-            model: Comment,
-            as: 'comments'
-          },
-          {
-            model: Post,
-            as: 'shared_on_posts'
-          },
-          {
-            model: Post,
-            as: 'shared_post',
-            include: [
-              {
-                model: PostMedia,
-                as: 'media',
-                attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-              },
-              {
-                model: User,
-                as: 'user',
-                attributes: [ 'name', 'id', 'username', 'createdAt' ],
-                include: [
-                  {
-                    model: Profile,
-                    as: 'profile',
-                    attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                    include: [
-                      {
-                        model: ProfileMedia,
-                        as: 'profile_media',
-                        attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                model: User,
-                as: 'mentioned_users',
-                attributes: [ 'id', 'username', 'name', 'createdAt' ]
-              }
-            ]
-          }
-        ]
-      });
+      post = await this.postService.getSinglePostByCode(postCode);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -284,10 +111,7 @@ class PostController {
 
     if (!post) return res.status(404).json({ status: 'Error', message: 'Internal server error' });
 
-    const result = post.toJSON();
-    result.shared_post = result.shared_post[0] ?? null; 
-    
-    return res.status(200).json({ status: 'Ok', message: 'successfully fetched post', data: result });
+    return res.status(200).json({ status: 'Ok', message: 'successfully fetched post', data: post });
   };
 
   public static deletePost = async (req: Request, res: Response) => {
@@ -295,14 +119,17 @@ class PostController {
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
+    const transaction = await Database.transaction();
     try {
       const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType> | null;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
-      if (post.getDataValue('user_id') !== authorizedUser.id) return res.status(403).json({ status: 'Error', message: 'You don\'t have permission to delete this post' });
-      await post.destroy();
-      await PostMedia.destroy({ where: { post_id: post.dataValues.id } });
+      if (post.dataValues.user_id !== authorizedUser.id) return res.status(403).json({ status: 'Error', message: 'You don\'t have permission to delete this post' });
+
+      await this.postService.removePost(post.dataValues.id, transaction);
+      await transaction.commit();
     } catch(e) {
       console.log(e);
+      await transaction.rollback();
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
@@ -321,7 +148,7 @@ class PostController {
       const alreadyLikedPost = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (alreadyLikedPost) return res.status(400).json({ status: 'Error', message: 'You already liked this post' });
       await PostLike.create({ post_id: post.dataValues.id, user_id: authorizedUser.id }, { transaction });
-      await this.notificationService.createNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', transaction);
+      await this.notificationService.createNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', post.dataValues.id, transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -344,7 +171,7 @@ class PostController {
       const postLike = await PostLike.findOne({ where: { user_id: authorizedUser.id, post_id: post.dataValues.id } });
       if (!postLike) return res.status(400).json({ status: 'Error', message: 'You were not liked this post' });
       await postLike.destroy({ transaction });
-      await this.notificationService.removeNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', transaction);
+      await this.notificationService.removeNotification(post.dataValues.user_id, authorizedUser.id, 'POST_LIKE', post.dataValues.id, transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -390,15 +217,15 @@ class PostController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Removed post from saved successfully' });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully removed post from saved' });
   };
 
   public static getRandomPost = async (req: Request, res: Response) => {
-    const { auth, exlcludePostIds } = req.body;
+    const { auth } = req.body;
     const { following } = req.query;
     const { user: authorizedUser } = auth;
 
-    let result;
+    let posts;
     try {
       let where;
       if (!authorizedUser.id) {
@@ -415,210 +242,28 @@ class PostController {
         }
       }
 
-      const posts = await Post.findAll({ where, include: [
-        {
-          model: PostMedia,
-          as: 'media',
-          attributes: [ 'id', 'file_name', 'file_mime_type' ]
-        },
-        {
-          model: User,
-          as: 'user',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ],
-          include: [
-            {
-              model: Profile,
-              as: 'profile',
-              attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-              include: [
-                {
-                  model: ProfileMedia,                  
-                  as: 'profile_media',
-                  attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'likers',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ]
-        },
-        {
-          model: User,
-          as: 'saved_by_users',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ]
-        },
-        {
-          model: User,
-          as: 'mentioned_users',
-          attributes: [ 'id', 'username', 'name', 'createdAt' ]
-        },
-        {
-          model: Comment,
-          as: 'comments'
-        },
-        {
-          model: Post,
-          as: 'shared_on_posts'
-        },
-        {
-          model: Post,
-          as: 'shared_post',
-          include: [
-            {
-              model: PostMedia,
-              as: 'media',
-              attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-            },
-            {
-              model: User,
-              as: 'user',
-              attributes: [ 'name', 'id', 'username', 'createdAt' ],
-              include: [
-                {
-                  model: Profile,
-                  as: 'profile',
-                  attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                  include: [
-                    {
-                      model: ProfileMedia,
-                      as: 'profile_media',
-                      attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              model: User,
-              as: 'mentioned_users',
-              attributes: [ 'id', 'username', 'name', 'createdAt' ]
-            }
-          ]
-        }
-      ], attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ], order: [ ['id', 'DESC'] ] , limit: 20 }) as unknown;
-      result = (posts as Model[]).map((post) => {
-        const jsonPost = post.toJSON();
-        jsonPost.shared_post = jsonPost.shared_post[0] ? jsonPost.shared_post[0] : null;
-        return jsonPost;
-      });
+      posts = await this.postService.getRandomPosts(where);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched posts', data: result });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched posts', data: posts });
   };
 
   public static getSavedPosts = async (req: Request, res: Response) => {
     const { auth } = req.body;
     const { user: authorizedUser } = auth;
 
-    let result;
+    let posts;
     try {
-      const posts = await SavedPost.findAll({ where: { user_id: authorizedUser.id }, include: [
-        {
-          model: Post,
-          as: 'post',
-          paranoid: true,
-          attributes: [ 'id', 'user_id', 'code', 'text', 'createdAt' ],
-          include: [
-            {
-              model: PostMedia,
-              as: 'media',
-              attributes: [ 'id', 'file_name', 'file_mime_type' ]
-            },
-            {
-              model: User,
-              as: 'user',
-              attributes: [ 'id', 'username', 'name', 'createdAt' ],
-              include: [
-                {
-                  model: Profile,
-                  as: 'profile',
-                  attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                  include: [
-                    {
-                      model: ProfileMedia,                  
-                      as: 'profile_media',
-                      attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              model: User,
-              as: 'likers',
-              attributes: [ 'id', 'username', 'name', 'createdAt' ]
-            },
-            {
-              model: User,
-              as: 'saved_by_users',
-              attributes: [ 'id', 'username', 'name', 'createdAt' ]
-            },
-            {
-              model: User,
-              as: 'mentioned_users',
-              attributes: [ 'id', 'username', 'name', 'createdAt' ]
-            },
-            {
-              model: Post,
-              as: 'shared_on_posts'
-            },
-            {
-              model: Post,
-              as: 'shared_post',
-              include: [
-                {
-                  model: PostMedia,
-                  as: 'media',
-                  attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
-                },
-                {
-                  model: User,
-                  as: 'mentioned_users',
-                  attributes: [ 'id', 'username', 'name', 'createdAt' ]
-                },
-                {
-                  model: User,
-                  as: 'user',
-                  attributes: [ 'id', 'username', 'name', 'createdAt' ],
-                  include: [
-                    {
-                      model: Profile,
-                      as: 'profile',
-                      attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
-                      include: [
-                        {
-                          model: ProfileMedia,                  
-                          as: 'profile_media',
-                          attributes: [ 'file_name', 'file_mime_type', 'context' ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ], order: [ [ 'id', 'DESC' ] ]}) as unknown;
-
-      result = (posts as Model[]).map((savedPost) => {
-        const { post } = savedPost.toJSON();
-        post.shared_post = post.shared_post[0] ? post.shared_post[0] : null;
-
-        return post;
-      });
+      posts = await this.postService.getSavedPosts(authorizedUser.id);
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched saved posts', data: result });
+    return res.status(200).json({ status: 'Ok', message: 'Sucessfully fetched saved posts', data: posts });
   };
 
   public static sharePost = async (req: Request, res: Response) => {
@@ -633,6 +278,7 @@ class PostController {
       const code = nanoid(20);
       const newPost = await Post.create({ user_id: authorizedUser.id, text, code }, { transaction }) as Model<postType, postType>;
       await SharedPost.create({ user_id: authorizedUser.id, post_id: newPost.dataValues.id, shared_post_id: sharedPost.dataValues.id, text }, { transaction });
+      await this.notificationService.createNotification(sharedPost.dataValues.user_id, authorizedUser.id, 'POST_SHARE', newPost.dataValues.id, transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -641,6 +287,20 @@ class PostController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully shared post' });
+  };
+
+  public static getPostById = async (req: Request, res: Response) => {
+    const { postId } = req.params;
+
+    let post;
+    try {
+      post = await this.postService.getSinglePostById(parseInt(postId));
+    } catch(e) {
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched post', data: post });
   };
 }
 
