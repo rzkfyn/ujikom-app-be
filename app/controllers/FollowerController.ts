@@ -9,6 +9,7 @@ import type {
   HasFollower as hasFollowerType,
 } from '../types/types.js';
 import Database from '../core/Database.js';
+import FollowRequest from '../models/FollowRequest.js';
 
 class FollowerController {
   private static userService = new UserService();
@@ -21,13 +22,18 @@ class FollowerController {
 
     const transaction = await Database.transaction();
     try {
-      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      const user = await this.userService.getUserDetail(username);
       if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
-      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id } }) as Model<hasFollowerType, hasFollowerType>;
+      const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.id, follower_user_id: authorizedUser.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (hasFollower) return res.status(400).json({ status: 'Error', message: `You already following ${username}`});
-      if (user.dataValues.id === authorizedUser.id) return res.status(400).json({ status: 'Error', message: 'You can\'t follow yourself' });
-      await HasFollower.create({ followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id }, { transaction });
-      await this.notificationService.createNotification(user.dataValues.id, authorizedUser.id, 'USER_FOLLOW', transaction);
+      if (user.id === authorizedUser.id) return res.status(400).json({ staus: 'Error', message: 'You can\'t follow yourself' });
+      if (user.account_setting.account_visibility === 'PRIVATE') {
+        await FollowRequest.create({ user_id: authorizedUser.id, requested_user_id: user.id }, { transaction });
+        await this.notificationService.createNotification(user.id, authorizedUser.id, 'USER_FOLLOW_REQUEST', null, transaction);
+      } else {
+        await HasFollower.create({ followed_user_id: user.id, follower_user_id: authorizedUser.id }, { transaction });
+        await this.notificationService.createNotification(user.id, authorizedUser.id, 'USER_FOLLOW', null, transaction);
+      }
       await transaction.commit();
     } catch(e) {
       console.log(e);
@@ -51,7 +57,7 @@ class FollowerController {
       const hasFollower = await HasFollower.findOne({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id } }) as Model<hasFollowerType, hasFollowerType>;
       if (!hasFollower) return res.status(400).json({ status: 'Error', message: `You're not following ${username}` });
       await HasFollower.destroy({ where: { followed_user_id: user.dataValues.id, follower_user_id: authorizedUser.id }, transaction});
-      await this.notificationService.removeNotification(user.dataValues.id, authorizedUser.id, 'USER_FOLLOW', transaction);
+      await this.notificationService.removeNotification(user.dataValues.id, authorizedUser.id, 'USER_FOLLOW', null, transaction);
       await transaction.commit();
     } catch(e) {
       console.log(e);
