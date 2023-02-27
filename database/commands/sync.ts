@@ -6,7 +6,11 @@ import { resolve } from 'path';
   const tables = readdirSync(resolve('app', 'models'))
     .map((table) => table.replace(/(.ts)/, '.js'));
   tables.forEach(async (table) => {
-    await import(`../../app/models/${table}`);
-    await Database.sync();
+    try{
+      await import(`../../app/models/${table}`);
+      await Database.sync();
+    } catch(e) {
+      console.log(e);
+    }
   });
 })();

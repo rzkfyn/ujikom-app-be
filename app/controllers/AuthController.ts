@@ -188,7 +188,7 @@ class AuthController {
       return res.status(401).json({ status: 'Error', message: 'Refresh token is invalid or already expired' });
     }
 
-    if (!((decoded.id === user.dataValues.id) && (decoded.email === user.dataValues.email) && (decoded.username === user.dataValues.username))) return res.status(401).json({
+    if (!((decoded.id === user.dataValues.id) && (decoded.email === user.dataValues.email))) return res.status(401).json({
       status: 'Error', message: 'Refresh token is invalid'
     });
     const access_token = jwt.sign({ id: user.dataValues.id, username: user.dataValues.username, email: user.dataValues.email }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '15s' });

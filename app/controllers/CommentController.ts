@@ -5,9 +5,15 @@ import Database from '../core/Database.js';
 import Comment from '../models/Comment.js';
 import CommentMedia from '../models/CommentMedia.js';
 import Post from '../models/Post.js';
+import Profile from '../models/Profile.js';
+import ProfileMedia from '../models/ProfileMedia.js';
+import User from '../models/User.js';
+import NotificationService from '../services/NotificationService.js';
 import { Post as postType } from '../types/types.js';
 
 class CommentController {
+  private static notificationService = new NotificationService();
+
   public static sendComment = async (req: Request, res: Response) => {
     const { postCode } = req.params;
     const { text, replied_comment_id, auth } = req.body;
@@ -29,7 +35,8 @@ class CommentController {
     try {
       const post = await Post.findOne({ where: { code: postCode } }) as Model<postType, postType> | null;
       if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
-      await Comment.create({ user_id: authorizedUser.id, post_id: post.dataValues.id, replied_comment_id: replied_comment_id ?? null, text }, { transaction });
+      const comment = await Comment.create({ user_id: authorizedUser.id, post_id: post.dataValues.id, replied_comment_id: replied_comment_id ?? null, text }, { transaction });
+      await this.notificationService.createNotification(post.dataValues.id, authorizedUser.id, 'POST_COMMENT', comment.dataValues.id, transaction);
       if (media) {
         if (Array.isArray(media)) {
           for (const file of media as UploadedFile[]) {
@@ -46,7 +53,44 @@ class CommentController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
-    return res.status(201).json({ status: 'Error', message: 'Successfully sent comment' });
+    return res.status(201).json({ status: 'Ok', message: 'Successfully sent comment' });
+  };
+
+  public static getPostComments = async (req: Request, res: Response) => {
+    const { postCode } = req.params;
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    let comments;
+    const limit: undefined | number = authorizedUser.id ? undefined : 5;
+    try {
+      const post = await Post.findOne({ where: { code: postCode }, }) as Model<postType, postType> | null;
+      if (!post) return res.status(404).json({ status: 'Error', message: 'Post not found' });
+      comments = await Comment.findAll({ where: { post_id: post.dataValues.id }, include: {
+        model: User,
+        as: 'user',
+        attributes: [ 'name', 'id', 'username', 'createdAt' ],
+        include: [
+          {
+            model: Profile,
+            as: 'profile',
+            attributes: [ 'bio', 'age', 'location', 'gender', 'url' ],
+            include: [
+              {
+                model: ProfileMedia,
+                as: 'profile_media',
+                attributes: [ 'file_name', 'file_mime_type', 'context' ]
+              }
+            ]
+          }
+        ]
+      }, limit });
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched post comments', data: comments });
   };
 }
 

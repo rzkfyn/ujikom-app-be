@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Database from '../core/Database.js';
+import eventEmitter from '../core/Event.js';
 import Notification from '../models/Notification.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
@@ -55,6 +56,7 @@ class NotificationController {
       return res.status(500).json({ status: 'Error', message: 'Internal server errror' });
     }
 
+    eventEmitter.emit('notificationchange', authorizedUser.id);
     return res.status(200).json({ status: 'Ok', message: 'Successfully set notifications as seen' });
   };
 

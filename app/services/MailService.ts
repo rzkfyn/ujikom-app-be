@@ -41,7 +41,7 @@ class MailService {
       to,
       subject: 'Email Verification Code',
       // text: `Hello ${username}!\n\nuse this code to verify your email: ${verificationCode}`,
-      html: `<div><a href="${CMSAPPBASEURL}/verifyemail?code=${verificationCode}">Click this link to verify your email<a><div>`
+      html: `<div><a href="${CMSAPPBASEURL}/verifyemail/${verificationCode}">Click this link to verify your email<a><div>`
     });
   };
 }

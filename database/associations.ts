@@ -11,6 +11,7 @@ import MentionedUserOnPost from '../app/models/MentionedUserOnPost.js';
 import SavedPost from '../app/models/SavedPost.js';
 import Comment from '../app/models/Comment.js';
 import SharedPost from '../app/models/SharedPost.js';
+import AccountSetting from '../app/models/AccountSetting.js';
 
 export const associationsInit = () => {
   User.belongsToMany(User, { 
@@ -35,6 +36,8 @@ export const associationsInit = () => {
     }, foreignKey: 'blocker_user_id', as: 'blocking' });
   User.hasOne(Profile, { foreignKey: 'user_id', as: 'profile' });
   Profile.belongsTo(User, { foreignKey: 'user_id', as: 'profile' });
+  User.hasOne(AccountSetting, { foreignKey: 'user_id', as: 'account_setting' });
+  AccountSetting.belongsTo(User, { foreignKey: 'user_id', as: 'account_setting' });
   Profile.hasMany(ProfileMedia, { foreignKey: 'profile_id', as: 'profile_media' });
   ProfileMedia.belongsTo(Profile, { foreignKey: 'profile_id', as: 'profile' });
   User.hasMany(Post, { foreignKey: 'user_id', as: 'posts' });
@@ -72,8 +75,6 @@ export const associationsInit = () => {
       model: SavedPost,
       paranoid: true
     }, foreignKey: 'user_id', as: 'saved_posts' });
-  // User.hasMany(SavedPost, { foreignKey: 'user_id', as: 'saved_post' });
-  // SavedPost.belongsTo(User, { foreignKey: 'user_id', as: 'saved_by_user' });
   Post.hasMany(SavedPost, { foreignKey: 'post_id', as: 'saved_post_vipot' });
   SavedPost.belongsTo(Post, { foreignKey: 'post_id', as: 'post' });
   Post.hasMany(Comment, { foreignKey: 'post_id', as: 'comments' });
@@ -83,11 +84,11 @@ export const associationsInit = () => {
   Post.belongsToMany(Post, {
     through: {
       model: SharedPost,
-      paranoid: true
+      paranoid: false,
     }, foreignKey: 'post_id', as: 'shared_post' });
   Post.belongsToMany(Post, {
     through: {
       model: SharedPost,
-      paranoid: true
+      paranoid: false,
     }, foreignKey: 'shared_post_id', as: 'shared_on_posts' });
 };

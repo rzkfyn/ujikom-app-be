@@ -89,10 +89,19 @@ interface ProfileWithMedia extends Profile {
   profile_media: ProfileMedia[]
 }
 
+interface AccountSetting {
+  id: number;
+  account_visibility: 'PUBLIC' | 'PRIVATE';
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
 interface UserDetail extends User {
-  profile: ProfileWithMedia,
-  followers: User[],
-  following: User[],
+  profile: ProfileWithMedia;
+  followers: User[];
+  following: User[];
+  account_setting: AccountSetting;
 }
 
 export {

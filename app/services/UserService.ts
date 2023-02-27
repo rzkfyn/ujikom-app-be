@@ -1,4 +1,6 @@
 import { Model } from 'sequelize';
+import AccountSetting from '../models/AccountSetting.js';
+import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
 import User from '../models/User.js';
@@ -43,6 +45,10 @@ class UserService {
           model: User,
           as: 'blocking',
           attributes: [ 'id', 'username', 'name', 'createdAt' ],
+        },
+        {
+          model: AccountSetting,
+          as: 'account_setting'
         }
       ]
     }) as Model<UserDetail, UserDetail> | null;
@@ -86,8 +92,21 @@ class UserService {
 
     if (!user) return false;
 
-    const result = ((user as any)[context] as Model[]).map((user) => user.toJSON());
+    const result = ((user as Model).dataValues[context] as Model[]).map((user) => user.toJSON());
     return result;
+  };
+
+  public isFollowed = async (userId: number, followed_user_id: number) => {
+    const hasFollower = await HasFollower.findOne({ where: { follower_user_id: userId, followed_user_id } });
+    if (!hasFollower) return false;
+    return true;
+  };
+
+  public isUserAccountPrivate = async (username: string) => {
+    const user = await this.getUserDetail(username);
+    if (!user) return false;
+ 
+    return user.account_setting.account_visibility === 'PRIVATE';
   };
 }
 
