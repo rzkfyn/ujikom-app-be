@@ -3,7 +3,7 @@ import Notification from '../models/Notification.js';
 import eventEmitter from '../core/Event.js';
 import Comment from '../models/Comment.js';
 
-type event = 'USER_FOLLOW' | 'USER_MENTION_ON_POST' | 'USER_MENTION_ON_BIO' | 'USER_MENTION_ON_COMMENT' | 'POST_LIKE' | 'POST_SHARE' | 'POST_COMMENT' | 'COMMENT_LIKE' | 'COMMENT_REPLY';
+type event = 'USER_FOLLOW' | 'USER_FOLLOW_REQUEST' | 'USER_FOLLOW_REQUEST_ACCEPTED' | 'USER_FOLLOW_REQUSERT_REJECTED' | 'USER_MENTION_ON_POST' | 'USER_MENTION_ON_BIO' | 'USER_MENTION_ON_COMMENT' | 'POST_LIKE' | 'POST_SHARE' | 'POST_COMMENT' | 'COMMENT_LIKE' | 'COMMENT_REPLY';
 
 class NotificationService {
   public createNotification = async (receiverUserId: number, firedByUserId: number, context: event, relatedEventId: number | null, transaction: Transaction) => {
