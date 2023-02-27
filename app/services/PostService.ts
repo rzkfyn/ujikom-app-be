@@ -63,11 +63,13 @@ class PostService {
     {
       model: Post,
       as: 'shared_post',
+      paranoid: false,
       include: [
         {
           model: PostMedia,
           as: 'media',
-          attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ]
+          attributes: [ 'id', 'post_id', 'file_name', 'file_mime_type' ],
+          paranoid: false
         },
         {
           model: User,
@@ -134,7 +136,7 @@ class PostService {
     await Post.destroy({ where: { id: postId }, transaction });
     await PostMedia.destroy({ where: { post_id: postId }, transaction });
     await SavedPost.destroy({ where: { post_id: postId }, transaction });
-    await SharedPost.destroy({ where: { post_id: postId }, transaction });
+    // await SharedPost.destroy({ where: { post_id: postId }, transaction });
     await this.notificationService.removeNotificationsByEvent('post', postId, transaction);
   };
 
