@@ -1,9 +1,11 @@
 import { Model } from 'sequelize';
 import AccountSetting from '../models/AccountSetting.js';
+import FollowRequest from '../models/FollowRequest.js';
 import HasFollower from '../models/HasFollower.js';
 import Profile from '../models/Profile.js';
 import ProfileMedia from '../models/ProfileMedia.js';
 import User from '../models/User.js';
+import UserPresence from '../models/UserPresence.js';
 import type { 
   UserDetail
 } from '../types/types.js';
@@ -49,6 +51,16 @@ class UserService {
         {
           model: AccountSetting,
           as: 'account_setting'
+        },
+        {
+          model: User,
+          as: 'follow_requests',
+          attributes: [ 'id', 'username', 'name', 'createdAt' ]
+        },
+        {
+          model: UserPresence,
+          as: 'user_presence',
+          attributes: [ 'status', 'last_seen' ]
         }
       ]
     }) as Model<UserDetail, UserDetail> | null;
@@ -86,6 +98,11 @@ class UserService {
           model: User,
           as: 'blocking',
           attributes: [ 'id', 'username', 'name', 'createdAt' ],
+        },
+        {
+          model: UserPresence,
+          as: 'user_presence',
+          attributes: [ 'status', 'last_seen' ]
         }
       ]
     } }) as unknown;
@@ -93,6 +110,7 @@ class UserService {
     if (!user) return false;
 
     const result = ((user as Model).dataValues[context] as Model[]).map((user) => user.toJSON());
+    console.log(result[0]);
     return result;
   };
 
@@ -107,6 +125,19 @@ class UserService {
     if (!user) return false;
  
     return user.account_setting.account_visibility === 'PRIVATE';
+  };
+
+  public getMutualConnections = async (username: string) => {
+    const user = await this.getUserDetail(username);
+    if (!user) return false;
+    const followers = await this.getUserConnectionsInfo(username, 'followers');
+    const following = await this.getUserConnectionsInfo(username, 'following');
+
+    const mutualConnections = (followers as UserDetail[]).filter((follower) => {
+      return (following as UserDetail[]).some((following) => following.id === follower.id);
+    });
+
+    return mutualConnections;
   };
 }
 
