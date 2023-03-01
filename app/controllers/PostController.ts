@@ -18,12 +18,11 @@ import NotificationService from '../services/NotificationService.js';
 import PostService from '../services/PostService.js';
 import MentionedUserOnPost from '../models/MentionedUserOnPost.js';
 import SharedPost from '../models/SharedPost.js';
-import UserService from '../services/UserService.js';
+import eventEmitter from '../core/Event.js';
 
 class PostController {
   private static notificationService = new NotificationService();
   private static postService = new PostService();
-  private static userService = new UserService();
 
   public static createPost = async (req: Request, res: Response) => {
     const { text, auth } = req.body;
@@ -156,6 +155,7 @@ class PostController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
+    eventEmitter.emit('poststatechange', postCode);
     return res.status(200).json({ status: 'Ok', message: 'Successfully liked post' });
   };
 
@@ -179,6 +179,7 @@ class PostController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
+    eventEmitter.emit('poststatechange', postCode);
     return res.status(200).json({ status: 'Ok', message: 'Successfully liked post' });
   };
 
@@ -227,22 +228,21 @@ class PostController {
 
     let posts;
     try {
-      let where;
-      if (!authorizedUser.id) {
-        where = undefined;
-      } else {
+      let where = 'user_id NOT IN (SELECT user_id FROM AccountSettings acs WHERE acs.account_visibility=\'PRIVATE\')';
+
+      if (authorizedUser.id) {
         if (!following) {
-          where = literal(`user_id NOT IN (${authorizedUser.id})`);
+          where = `${where} AND user_id NOT IN (${authorizedUser.id})`;
         } else {
-          where = literal(`user_id NOT IN (${authorizedUser.id}) AND user_id IN (
+          where = `${where} AND user_id NOT IN (${authorizedUser.id}) AND user_id IN (
             SELECT followed_user_id FROM HasFollowers hf
             WHERE hf.follower_user_id=${authorizedUser.id}
             AND hf.deletedAt IS NULL
-          )`);
+          )`;
         }
       }
 
-      posts = await this.postService.getRandomPosts(where);
+      posts = await this.postService.getRandomPosts(literal(where));
     } catch(e) {
       console.log(e);
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
@@ -286,6 +286,7 @@ class PostController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
+    eventEmitter.emit('poststatechange', postCode);
     return res.status(200).json({ status: 'Ok', message: 'Successfully shared post' });
   };
 

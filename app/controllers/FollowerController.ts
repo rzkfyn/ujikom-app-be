@@ -10,6 +10,8 @@ import type {
 } from '../types/types.js';
 import Database from '../core/Database.js';
 import FollowRequest from '../models/FollowRequest.js';
+import Profile from '../models/Profile.js';
+import ProfileMedia from '../models/ProfileMedia.js';
 
 class FollowerController {
   private static userService = new UserService();
@@ -123,6 +125,127 @@ class FollowerController {
     }
 
     return res.status(200).json({ status: 'Ok', message: `${username} removed from your follower list` });
+  };
+
+  public static getFollowRequests = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    let result;
+    try {
+      const followRequests = await FollowRequest.findAll({ where: { requested_user_id: authorizedUser.id },
+        include: {
+          model: User,
+          as: 'user',
+          attributes: [ 'id', 'username', 'name', 'createdAt', 'email_verified_at' ],
+          include: [
+            {
+              model: Profile,
+              as: 'profile',
+              attributes: [ 'bio', 'age', 'location', 'gender', 'url', 'date_of_birth' ],
+              include: [
+                {
+                  model: ProfileMedia,
+                  as: 'profile_media',
+                  attributes: [ 'file_name', 'file_mime_type', 'context' ]
+                }
+              ]
+            },
+          ]
+        }
+      }) as unknown;
+
+      console.log(followRequests);
+      result = (followRequests as Model[]).map((followRequest) => followRequest.toJSON());
+      result = result.map((followRequest) => followRequest.user);
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched follow requests data', data: result });
+  };
+
+  public static cancelFollowRequest = async (req: Request, res: Response) => {
+    const { auth, username } = req.body;
+    const { user: authorizedUser } = auth;
+    const transaction = await Database.transaction();
+
+    console.log(req.body);
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const followRequest = await FollowRequest.findOne({ where: { user_id: authorizedUser.id, requested_user_id: user.dataValues.id } }) as Model | null;
+      if (!followRequest) return res.status(400).json({ status: 'Error', message: 'You didn\'t requested to follow this user' });
+      await followRequest.destroy({ transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully canceled follow request' });
+  };
+
+  public static acceptFollowRequest = async (req: Request, res: Response) => {
+    const { auth, username } = req.body;
+    const { user: authorizedUser } = auth;
+    const transaction = await Database.transaction();
+
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType>;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const followRequest = await FollowRequest.findOne({ where: { user_id: user.dataValues.id, requested_user_id: authorizedUser.id } }) as Model | null;
+      if (!followRequest) return res.status(400).json({ status: 'Error', message: `${user.dataValues.username} didn't requested to follow this you` });
+
+      await followRequest.destroy({ transaction });
+      await HasFollower.create({ followed_user_id: authorizedUser.id, follower_user_id: user.dataValues.id }, { transaction });
+      await this.notificationService.createNotification(user.dataValues.id, authorizedUser.id, 'USER_FOLLOW_REQUEST_ACCEPTED', null, transaction);
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully accepted follow request' });
+  };
+
+  public static rejectFollowRequest = async (req: Request, res: Response) => {
+    const { auth, username } = req.body;
+    const { user: authorizedUser } = auth;
+    const transaction = await Database.transaction();
+
+    try {
+      const user = await User.findOne({ where: { username } }) as Model<userType, userType> | null;
+      if (!user) return res.status(404).json({ status: 'Error', message: 'User not found' });
+      const followRequest = await FollowRequest.findOne({ where: { user_id: user.dataValues.id, requested_user_id: authorizedUser.id } }) as Model | null;
+      if (!followRequest) return res.status(400).json({ status: 'Error', message: 'You didn\'t requested to follow this user' });
+      await followRequest.destroy({ transaction });
+      await transaction.commit();
+    } catch(e) {
+      console.log(e);
+      transaction.rollback();
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully rejected follow request' });
+  };
+
+  public static getMutualConnections = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+
+    let result;
+    try {
+      result = await this.userService.getMutualConnections(authorizedUser.username as string);
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully fetched mutual connections', data: result });
   };
 }
 

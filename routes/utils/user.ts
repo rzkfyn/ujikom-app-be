@@ -14,6 +14,7 @@ const router = Router();
 router.post('/email/verify', EmailVerificationController.verifyEmail);
 router.use(optAuth);
 router.get('/connects', UserController.getRandomUsers);
+router.get('/follow-requests', auth, FollowerController.getFollowRequests);
 router.get('/:username?', UserController.getUser);
 router.post('/username', UserController.isUsernameAvailable);
 router.get('/:username/posts', PostController.getUserPosts);
@@ -35,5 +36,9 @@ router.put('/account/username', UserController.changeUsername);
 router.put('/account/email', UserController.changeEmail);
 router.put('/account/password', UserController.changePassword);
 router.put('/account/visibility', AccountSettingController.changeAcccontVisibility);
+router.delete('/follow-requests/cancel', FollowerController.cancelFollowRequest);
+router.post('/follow-requests/accept', FollowerController.acceptFollowRequest);
+router.delete('/follow-requests/reject', FollowerController.rejectFollowRequest);
+router.get('/connections/mutual', FollowerController.getMutualConnections);
 
 export default router;

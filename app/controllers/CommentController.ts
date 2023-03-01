@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { UploadedFile } from 'express-fileupload';
 import { Model } from 'sequelize';
 import Database from '../core/Database.js';
+import eventEmitter from '../core/Event.js';
 import Comment from '../models/Comment.js';
 import CommentMedia from '../models/CommentMedia.js';
 import Post from '../models/Post.js';
@@ -53,6 +54,7 @@ class CommentController {
       return res.status(500).json({ status: 'Error', message: 'Internal server error' });
     }
 
+    eventEmitter.emit('poststatechange', postCode);
     return res.status(201).json({ status: 'Ok', message: 'Successfully sent comment' });
   };
 
@@ -91,6 +93,28 @@ class CommentController {
     }
 
     return res.status(200).json({ status: 'Ok', message: 'Successfully fetched post comments', data: comments });
+  };
+
+  public static removeComment = async (req: Request, res: Response) => {
+    const { auth } = req.body;
+    const { user: authorizedUser } = auth;
+    const { commentId } = req.params;
+
+    try {
+      const comment = await Comment.findOne({ where: { id: commentId }, include: {
+        model: Post,
+        as: 'Post'
+      }});
+
+      if (!comment) return res.status(404).json({ status: 'Error', message: 'Comment not found' });
+      if (comment.dataValues.user_id !== authorizedUser.id && comment.dataValues.post.dataValues.user_id !== authorizedUser.id) return res.status(403).json({ status: 'Error', message: 'You are not allowed to remove this comment' });
+      await comment.destroy();
+    } catch(e) {
+      console.log(e);
+      return res.status(500).json({ status: 'Error', message: 'Internal server error' });
+    }
+
+    return res.status(200).json({ status: 'Ok', message: 'Successfully removed comment' });
   };
 }
 

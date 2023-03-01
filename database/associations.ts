@@ -12,6 +12,8 @@ import SavedPost from '../app/models/SavedPost.js';
 import Comment from '../app/models/Comment.js';
 import SharedPost from '../app/models/SharedPost.js';
 import AccountSetting from '../app/models/AccountSetting.js';
+import FollowRequest from '../app/models/FollowRequest.js';
+import UserPresence from '../app/models/UserPresence.js';
 
 export const associationsInit = () => {
   User.belongsToMany(User, { 
@@ -84,11 +86,25 @@ export const associationsInit = () => {
   Post.belongsToMany(Post, {
     through: {
       model: SharedPost,
-      paranoid: false,
+      paranoid: true,
     }, foreignKey: 'post_id', as: 'shared_post' });
   Post.belongsToMany(Post, {
     through: {
       model: SharedPost,
-      paranoid: false,
+      paranoid: true,
     }, foreignKey: 'shared_post_id', as: 'shared_on_posts' });
+  User.belongsToMany(User, {
+    through: {
+      model: FollowRequest,
+      paranoid: true
+    }, foreignKey: 'requested_user_id', as: 'follow_requests' });
+  User.belongsToMany(User, {
+    through: {
+      model: FollowRequest,
+      paranoid: true
+    }, foreignKey: 'user_id', as: 'requested_to_follow_users' });
+  FollowRequest.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+  FollowRequest.belongsTo(User, { foreignKey: 'requested_user_id', as: 'requested_user' });
+  User.hasOne(UserPresence, { foreignKey: 'user_id', as: 'user_presence' });
+  UserPresence.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 };
