@@ -100,6 +100,7 @@ class AuthController {
 
   public static login = async (req: Request, res: Response) => {
     const { uid, password } = req.body;
+    const { fromMobile } = req.query;
 
     let user;
     try {
@@ -122,7 +123,7 @@ class AuthController {
       if (!comparationResult) return res.status(401).json({ status: 'Error', message: 'The credential doesn\'t match with any of our records' });
 
       refresh_token = jwt.sign({ id: user.dataValues.id, email: user.dataValues.email, username: user.dataValues.username }, process.env.SECRET_JWT_REFRESH_TOKEN as string, { expiresIn: '24h' });
-      access_token = jwt.sign({ id: user.dataValues.id, email: user.dataValues.email, username: user.dataValues.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: '30s' });
+      access_token = jwt.sign({ id: user.dataValues.id, email: user.dataValues.email, username: user.dataValues.username }, process.env.SECRET_JWT_ACCESS_TOKEN as string, { expiresIn: fromMobile ? '30s' : '1d' });
 
       await User.update({ refresh_token }, { where: { id: user.dataValues.id } });
     } catch(e) {
