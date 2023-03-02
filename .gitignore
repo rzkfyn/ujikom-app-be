@@ -1,4 +1,9 @@
 node_modules
 dist
 .env
-public
+public/media/images/cover_images/*
+public/media/images/profile_images/*
+!public/media/images/profile_images/default.png
+!public/media/images/cover_images/default.png
+public/media/images/posts/*
+!public/media/images/posts/
